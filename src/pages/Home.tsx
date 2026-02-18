@@ -1,0 +1,220 @@
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { Bell, Zap, TrendingUp, TrendingDown, Plus, ArrowRight, Battery, Wifi, WifiOff, Lightbulb } from "lucide-react";
+import BottomNav from "@/components/BottomNav";
+import { useTheme } from "@/components/ThemeProvider";
+import { cn } from "@/lib/utils";
+
+const mockTransactions = [
+  { id: 1, type: "recharge", label: "M-Pesa Recharge", amount: "+24.5 kWh", value: "+KES 500", time: "2h ago", icon: "💳", color: "text-success" },
+  { id: 2, type: "usage", label: "Daily Consumption", amount: "-3.2 kWh", value: "-KES 65", time: "5h ago", icon: "⚡", color: "text-destructive" },
+  { id: 3, type: "transfer", label: "Transfer to James", amount: "-5.0 kWh", value: "-KES 102", time: "1d ago", icon: "🔄", color: "text-accent" },
+];
+
+// Animated circular gauge SVG
+const ConsumptionGauge = ({ percent }: { percent: number }) => {
+  const r = 52;
+  const circ = 2 * Math.PI * r;
+  const dashOffset = circ - (circ * percent) / 100;
+
+  return (
+    <div className="flex flex-col items-center gap-1">
+      <svg width="128" height="128" viewBox="0 0 128 128">
+        <circle cx="64" cy="64" r={r} fill="none" stroke="hsl(var(--border))" strokeWidth="10" />
+        <circle
+          cx="64" cy="64" r={r}
+          fill="none"
+          stroke="hsl(var(--primary))"
+          strokeWidth="10"
+          strokeLinecap="round"
+          strokeDasharray={circ}
+          strokeDashoffset={dashOffset}
+          transform="rotate(-90 64 64)"
+          style={{ transition: "stroke-dashoffset 1.2s cubic-bezier(0.16, 1, 0.3, 1)", filter: "drop-shadow(0 0 6px hsl(var(--primary)))" }}
+        />
+        <text x="64" y="60" textAnchor="middle" fill="hsl(var(--foreground))" fontSize="18" fontWeight="700">{percent}%</text>
+        <text x="64" y="76" textAnchor="middle" fill="hsl(var(--muted-foreground))" fontSize="10">Daily usage</text>
+      </svg>
+    </div>
+  );
+};
+
+const Home = () => {
+  const navigate = useNavigate();
+  const { theme } = useTheme();
+  const [notifCount] = useState(3);
+
+  return (
+    <div className={cn("min-h-screen pb-24 relative", theme === "dark" ? "gradient-navy" : "bg-background")}>
+      {/* Background orbs */}
+      <div className="absolute top-0 right-0 w-80 h-80 rounded-full bg-primary/5 blur-3xl pointer-events-none" />
+      <div className="absolute top-60 left-0 w-60 h-60 rounded-full bg-accent/5 blur-3xl pointer-events-none" />
+
+      {/* Header */}
+      <div className="px-5 pt-14 pb-4 flex items-center justify-between animate-fade-in">
+        <div>
+          <p className="text-muted-foreground text-sm">Good morning ☀️</p>
+          <h2 className="text-xl font-bold text-foreground">James Kamau</h2>
+        </div>
+        <button
+          onClick={() => navigate("/notifications")}
+          className="relative p-2.5 glass-card rounded-xl border border-border/30"
+        >
+          <Bell className="w-5 h-5 text-foreground" />
+          {notifCount > 0 && (
+            <span className="absolute -top-1 -right-1 w-5 h-5 bg-accent rounded-full text-[10px] font-bold flex items-center justify-center text-[hsl(var(--navy))]">
+              {notifCount}
+            </span>
+          )}
+        </button>
+      </div>
+
+      <div className="px-5 space-y-4">
+        {/* Wallet balance card */}
+        <div className="relative overflow-hidden rounded-2xl p-5 animate-fade-in-up" style={{ background: "linear-gradient(135deg, hsl(228, 50%, 14%) 0%, hsl(210, 60%, 18%) 50%, hsl(191, 50%, 16%) 100%)", border: "1px solid rgba(0, 212, 255, 0.15)", boxShadow: "0 8px 40px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255,255,255,0.06)" }}>
+          {/* Card shimmer */}
+          <div className="absolute inset-0 opacity-20" style={{ background: "linear-gradient(105deg, transparent 40%, rgba(0,212,255,0.15) 50%, transparent 60%)" }} />
+
+          <div className="relative flex justify-between items-start mb-4">
+            <div>
+              <p className="text-xs text-primary/70 uppercase tracking-widest mb-1">Energy Wallet</p>
+              <div className="flex items-end gap-2">
+                <span className="text-4xl font-bold text-foreground glow-cyan-text">87.4</span>
+                <span className="text-primary font-semibold text-lg mb-1">kWh</span>
+              </div>
+              <p className="text-muted-foreground text-sm mt-1">≈ KES 1,785.00</p>
+            </div>
+            <div className="w-12 h-12 rounded-xl gradient-cyan flex items-center justify-center glow-cyan">
+              <Zap className="w-6 h-6 text-[hsl(var(--navy))]" strokeWidth={2.5} />
+            </div>
+          </div>
+
+          {/* Stats row */}
+          <div className="flex gap-3 mt-2">
+            <div className="flex-1 glass rounded-xl p-2.5 border border-white/5">
+              <div className="flex items-center gap-1 mb-1">
+                <Battery className="w-3.5 h-3.5 text-success" />
+                <span className="text-[10px] text-muted-foreground uppercase">Est. days</span>
+              </div>
+              <span className="text-xl font-bold text-success">12</span>
+              <span className="text-xs text-muted-foreground ml-1">days</span>
+            </div>
+            <div className="flex-1 glass rounded-xl p-2.5 border border-white/5">
+              <div className="flex items-center gap-1 mb-1">
+                <TrendingDown className="w-3.5 h-3.5 text-primary" />
+                <span className="text-[10px] text-muted-foreground uppercase">Daily avg</span>
+              </div>
+              <span className="text-xl font-bold text-foreground">7.2</span>
+              <span className="text-xs text-muted-foreground ml-1">kWh</span>
+            </div>
+            <div className="flex-1 glass rounded-xl p-2.5 border border-white/5">
+              <div className="flex items-center gap-1 mb-1">
+                <TrendingUp className="w-3.5 h-3.5 text-accent" />
+                <span className="text-[10px] text-muted-foreground uppercase">vs yest.</span>
+              </div>
+              <span className="text-xl font-bold text-accent">+18%</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Active meter card */}
+        <div className="glass-card rounded-2xl p-4 animate-fade-in-up" style={{ animationDelay: "0.1s" }}>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-primary/15 flex items-center justify-center">
+                <Zap className="w-5 h-5 text-primary" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <p className="text-sm font-semibold text-foreground">Meter KE-00482</p>
+                  <span className="flex items-center gap-1 text-[10px] bg-success/15 text-success rounded-full px-2 py-0.5">
+                    <Wifi className="w-2.5 h-2.5" /> Online
+                  </span>
+                </div>
+                <p className="text-xs text-muted-foreground mt-0.5">Nairobi Apt — 0.45 kWh/hr</p>
+              </div>
+            </div>
+            <button onClick={() => navigate("/meters")} className="text-primary">
+              <ArrowRight className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+
+        {/* Consumption gauge + insight */}
+        <div className="flex gap-4 animate-fade-in-up" style={{ animationDelay: "0.15s" }}>
+          <div className="glass-card rounded-2xl p-4 flex-1 flex flex-col items-center justify-center">
+            <ConsumptionGauge percent={68} />
+            <p className="text-xs text-muted-foreground mt-1">of daily average</p>
+          </div>
+
+          {/* Smart insight */}
+          <div className="flex flex-col gap-3 flex-1">
+            <div className="glass-card rounded-2xl p-4 flex-1 flex flex-col justify-between border-l-2 border-accent">
+              <Lightbulb className="w-5 h-5 text-accent mb-2" />
+              <p className="text-xs text-foreground leading-relaxed">
+                You used <span className="text-accent font-bold">18% more</span> than yesterday
+              </p>
+              <p className="text-[10px] text-muted-foreground mt-1">At current rate, power lasts <span className="text-success font-medium">12 days</span></p>
+            </div>
+            <div className="glass-card rounded-2xl p-4 flex-1 border-l-2 border-primary">
+              <p className="text-[10px] text-muted-foreground mb-1">Peak hour today</p>
+              <p className="text-sm font-bold text-foreground">6:00 PM</p>
+              <p className="text-[10px] text-primary mt-0.5">1.2 kWh consumed</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Quick actions */}
+        <div className="animate-fade-in-up" style={{ animationDelay: "0.2s" }}>
+          <h3 className="text-sm font-semibold text-muted-foreground mb-3 uppercase tracking-wide">Quick Actions</h3>
+          <div className="grid grid-cols-4 gap-3">
+            {[
+              { label: "Recharge", icon: "💳", path: "/recharge", color: "bg-primary/15 border-primary/20" },
+              { label: "Transfer", icon: "🔄", path: "/transfer", color: "bg-accent/15 border-accent/20" },
+              { label: "Meters", icon: "⚡", path: "/meters", color: "bg-success/15 border-success/20" },
+              { label: "Analytics", icon: "📊", path: "/analytics", color: "bg-purple-500/15 border-purple-500/20" },
+            ].map(({ label, icon, path, color }) => (
+              <button
+                key={label}
+                onClick={() => navigate(path)}
+                className={`flex flex-col items-center gap-2 p-3 rounded-2xl border transition-all active:scale-95 ${color}`}
+              >
+                <span className="text-2xl">{icon}</span>
+                <span className="text-[10px] font-medium text-foreground">{label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Recent transactions */}
+        <div className="animate-fade-in-up" style={{ animationDelay: "0.25s" }}>
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Recent Transactions</h3>
+            <button className="text-xs text-primary font-medium">See all</button>
+          </div>
+          <div className="glass-card rounded-2xl overflow-hidden">
+            {mockTransactions.map((tx, i) => (
+              <div key={tx.id} className={`flex items-center gap-3 p-4 ${i < mockTransactions.length - 1 ? "border-b border-border/30" : ""}`}>
+                <div className="w-10 h-10 rounded-xl bg-muted/50 flex items-center justify-center text-xl">
+                  {tx.icon}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-foreground truncate">{tx.label}</p>
+                  <p className="text-xs text-muted-foreground">{tx.time}</p>
+                </div>
+                <div className="text-right">
+                  <p className={`text-sm font-bold ${tx.color}`}>{tx.amount}</p>
+                  <p className="text-xs text-muted-foreground">{tx.value}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <BottomNav active="/" />
+    </div>
+  );
+};
+
+export default Home;
