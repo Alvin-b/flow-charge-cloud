@@ -14,7 +14,111 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      meter_link_requests: {
+        Row: {
+          id: string
+          requested_at: string
+          resolved_at: string | null
+          status: string
+          tuya_device_id: string
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          requested_at?: string
+          resolved_at?: string | null
+          status?: string
+          tuya_device_id: string
+          user_id: string
+        }
+        Update: {
+          id?: string
+          requested_at?: string
+          resolved_at?: string | null
+          status?: string
+          tuya_device_id?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      meters: {
+        Row: {
+          balance_kwh: number
+          created_at: string
+          id: string
+          last_sync: string | null
+          linked_at: string | null
+          max_kwh: number
+          name: string
+          property_name: string | null
+          rate_kwh_hr: number | null
+          sms_fallback: boolean
+          status: string
+          tuya_device_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          balance_kwh?: number
+          created_at?: string
+          id?: string
+          last_sync?: string | null
+          linked_at?: string | null
+          max_kwh?: number
+          name?: string
+          property_name?: string | null
+          rate_kwh_hr?: number | null
+          sms_fallback?: boolean
+          status?: string
+          tuya_device_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          balance_kwh?: number
+          created_at?: string
+          id?: string
+          last_sync?: string | null
+          linked_at?: string | null
+          max_kwh?: number
+          name?: string
+          property_name?: string | null
+          rate_kwh_hr?: number | null
+          sms_fallback?: boolean
+          status?: string
+          tuya_device_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      wallets: {
+        Row: {
+          balance_kwh: number
+          created_at: string
+          id: string
+          max_kwh: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          balance_kwh?: number
+          created_at?: string
+          id?: string
+          max_kwh?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          balance_kwh?: number
+          created_at?: string
+          id?: string
+          max_kwh?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
