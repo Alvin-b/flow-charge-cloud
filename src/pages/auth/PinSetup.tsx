@@ -1,29 +1,58 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Zap, Fingerprint, Delete } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
+import { useToast } from "@/hooks/use-toast";
+
+const hashPin = async (pin: string): Promise<string> => {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(pin + "powerflow_salt");
+  const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
+};
 
 const PinSetup = () => {
   const navigate = useNavigate();
+  const { user, refreshProfile } = useAuth();
+  const { toast } = useToast();
   const [step, setStep] = useState<"create" | "confirm">("create");
   const [pin, setPin] = useState("");
   const [confirmPin, setConfirmPin] = useState("");
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
 
   const currentPin = step === "create" ? pin : confirmPin;
   const setCurrentPin = step === "create" ? setPin : setConfirmPin;
 
-  const handlePress = (digit: string) => {
+  const handlePress = async (digit: string) => {
     if (currentPin.length < 4) {
       const next = currentPin + digit;
       setCurrentPin(next);
       if (next.length === 4) {
-        setTimeout(() => {
+        setTimeout(async () => {
           if (step === "create") {
             setStep("confirm");
           } else {
             if (next === pin) {
-              navigate("/");
+              // Save pin hash to profile
+              setLoading(true);
+              try {
+                const pinHash = await hashPin(pin);
+                if (user) {
+                  const { error: upsertError } = await supabase
+                    .from("profiles")
+                    .upsert({ user_id: user.id, pin_hash: pinHash }, { onConflict: "user_id" });
+                  if (upsertError) throw upsertError;
+                  await refreshProfile();
+                }
+                navigate("/", { replace: true });
+              } catch (err: any) {
+                toast({ title: "Error saving PIN", description: err.message, variant: "destructive" });
+              } finally {
+                setLoading(false);
+              }
             } else {
               setError("PINs don't match. Try again.");
               setConfirmPin("");
@@ -37,7 +66,7 @@ const PinSetup = () => {
 
   const handleDelete = () => setCurrentPin(currentPin.slice(0, -1));
 
-  const keys = ["1","2","3","4","5","6","7","8","9","","0","⌫"];
+  const keys = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "", "0", "⌫"];
 
   return (
     <div className="min-h-screen gradient-navy flex flex-col px-6">
@@ -45,7 +74,10 @@ const PinSetup = () => {
 
       <div className="pt-14 flex items-center gap-3 animate-fade-in">
         <button
-          onClick={() => step === "confirm" ? (setStep("create"), setConfirmPin("")) : navigate(-1)}
+          onClick={() => {
+            if (step === "confirm") { setStep("create"); setConfirmPin(""); }
+            else navigate(-1);
+          }}
           className="p-2 rounded-xl hover:bg-muted/30 transition-colors"
         >
           <ArrowLeft className="w-5 h-5 text-foreground" />
@@ -81,20 +113,21 @@ const PinSetup = () => {
 
         {/* PIN dots */}
         <div className="flex gap-4 mb-2 animate-scale-in">
-          {[0,1,2,3].map((i) => (
+          {[0, 1, 2, 3].map((i) => (
             <div
               key={i}
               className={`w-4 h-4 rounded-full transition-all duration-200 ${
-                i < currentPin.length
-                  ? "bg-primary scale-110 glow-cyan"
-                  : "bg-border"
+                i < currentPin.length ? "bg-primary scale-110 glow-cyan" : "bg-border"
               }`}
             />
           ))}
         </div>
 
-        {error && (
-          <p className="text-sm text-destructive mt-3 mb-2 animate-fade-in">{error}</p>
+        {error && <p className="text-sm text-destructive mt-3 mb-2 animate-fade-in">{error}</p>}
+        {loading && (
+          <div className="mt-3">
+            <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto" />
+          </div>
         )}
 
         {/* Keypad */}
@@ -102,11 +135,14 @@ const PinSetup = () => {
           {keys.map((key, i) => (
             <button
               key={i}
-              onClick={() => key === "⌫" ? handleDelete() : key !== "" ? handlePress(key) : null}
-              className={`h-16 rounded-2xl font-semibold text-xl transition-all duration-150 active:scale-95 ${
-                key === "" ? "invisible" :
-                key === "⌫" ? "glass-card text-muted-foreground hover:text-foreground hover:bg-muted/30 border border-border/30" :
-                "glass-card text-foreground hover:bg-primary/10 hover:border-primary/30 border border-border/30 hover:text-primary"
+              disabled={loading}
+              onClick={() => (key === "⌫" ? handleDelete() : key !== "" ? handlePress(key) : undefined)}
+              className={`h-16 rounded-2xl font-semibold text-xl transition-all duration-150 active:scale-95 disabled:opacity-50 ${
+                key === ""
+                  ? "invisible"
+                  : key === "⌫"
+                  ? "glass-card text-muted-foreground hover:text-foreground hover:bg-muted/30 border border-border/30"
+                  : "glass-card text-foreground hover:bg-primary/10 hover:border-primary/30 border border-border/30 hover:text-primary"
               }`}
             >
               {key === "⌫" ? <Delete className="w-5 h-5 mx-auto" /> : key}
@@ -114,7 +150,6 @@ const PinSetup = () => {
           ))}
         </div>
 
-        {/* Biometric hint */}
         <p className="text-xs text-muted-foreground mt-8 text-center animate-fade-in-up" style={{ animationDelay: "0.2s" }}>
           You can enable biometric authentication in Settings after setup
         </p>
