@@ -5,7 +5,10 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { ThemeProvider } from "@/components/ThemeProvider";
+import { AuthProvider } from "@/hooks/useAuth";
+import AuthGuard from "@/components/AuthGuard";
 import SplashScreen from "./pages/SplashScreen";
+import Register from "./pages/auth/Register";
 import PhoneEntry from "./pages/auth/PhoneEntry";
 import OTPVerify from "./pages/auth/OTPVerify";
 import PinSetup from "./pages/auth/PinSetup";
@@ -25,7 +28,6 @@ const App = () => {
   const [showSplash, setShowSplash] = useState(true);
 
   useEffect(() => {
-    // Register service worker
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker.register("/sw.js").catch(() => {});
     }
@@ -38,28 +40,32 @@ const App = () => {
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider defaultTheme="dark" storageKey="powerflow-theme">
-        <TooltipProvider>
-          <Toaster />
-          <Sonner />
-          <BrowserRouter>
-            <Routes>
-              {/* Auth */}
-              <Route path="/auth/phone" element={<PhoneEntry />} />
-              <Route path="/auth/otp" element={<OTPVerify />} />
-              <Route path="/auth/pin" element={<PinSetup />} />
-              {/* App */}
-              <Route path="/" element={<Home />} />
-              <Route path="/recharge" element={<Recharge />} />
-              <Route path="/analytics" element={<Analytics />} />
-              <Route path="/transfer" element={<Transfer />} />
-              <Route path="/profile" element={<Profile />} />
-              <Route path="/meters" element={<Meters />} />
-              <Route path="/notifications" element={<Notifications />} />
-              <Route path="/install" element={<Install />} />
-              <Route path="*" element={<NotFound />} />
-            </Routes>
-          </BrowserRouter>
-        </TooltipProvider>
+        <AuthProvider>
+          <TooltipProvider>
+            <Toaster />
+            <Sonner />
+            <BrowserRouter>
+              <Routes>
+                {/* Auth routes — public */}
+                <Route path="/auth/register" element={<Register />} />
+                <Route path="/auth/phone" element={<PhoneEntry />} />
+                <Route path="/auth/otp" element={<OTPVerify />} />
+                <Route path="/auth/pin" element={<PinSetup />} />
+
+                {/* Protected app routes */}
+                <Route path="/" element={<AuthGuard><Home /></AuthGuard>} />
+                <Route path="/recharge" element={<AuthGuard><Recharge /></AuthGuard>} />
+                <Route path="/analytics" element={<AuthGuard><Analytics /></AuthGuard>} />
+                <Route path="/transfer" element={<AuthGuard><Transfer /></AuthGuard>} />
+                <Route path="/profile" element={<AuthGuard><Profile /></AuthGuard>} />
+                <Route path="/meters" element={<AuthGuard><Meters /></AuthGuard>} />
+                <Route path="/notifications" element={<AuthGuard><Notifications /></AuthGuard>} />
+                <Route path="/install" element={<Install />} />
+                <Route path="*" element={<NotFound />} />
+              </Routes>
+            </BrowserRouter>
+          </TooltipProvider>
+        </AuthProvider>
       </ThemeProvider>
     </QueryClientProvider>
   );
