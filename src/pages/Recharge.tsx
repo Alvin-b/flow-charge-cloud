@@ -1,8 +1,10 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Phone, CheckCircle, XCircle, Loader2 } from "lucide-react";
+import { ArrowLeft, Phone, CheckCircle, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import BottomNav from "@/components/BottomNav";
+import { useAuth } from "@/hooks/useAuth";
+import { supabase } from "@/integrations/supabase/client";
 
 const PRESETS = [50, 100, 200, 500, 1000];
 const KES_PER_KWH = 20.45;
@@ -11,16 +13,30 @@ type PayState = "idle" | "pending" | "success" | "failed";
 
 const Recharge = () => {
   const navigate = useNavigate();
+  const { profile } = useAuth();
   const [amount, setAmount] = useState("");
-  const [phone, setPhone] = useState("0712 345 678");
+  const [phone, setPhone] = useState("");
   const [payState, setPayState] = useState<PayState>("idle");
+  const [walletBalance, setWalletBalance] = useState(0);
   const [txId] = useState(`PF${Date.now().toString().slice(-8)}`);
 
+  useEffect(() => {
+    if (profile?.phone) {
+      setPhone(profile.phone);
+    }
+    supabase.from("wallets").select("balance_kwh").maybeSingle().then(({ data }) => {
+      setWalletBalance(data?.balance_kwh ?? 0);
+    });
+  }, [profile]);
+
   const kwhPreview = amount ? (parseFloat(amount) / KES_PER_KWH).toFixed(2) : "0.00";
+  const dailyAvg = 7.2;
+  const daysLeft = dailyAvg > 0 ? Math.round(walletBalance / dailyAvg) : 0;
 
   const handlePay = () => {
     if (!amount || parseFloat(amount) < 10) return;
     setPayState("pending");
+    // TODO: Replace with real M-Pesa STK push edge function call
     setTimeout(() => setPayState("success"), 3500);
   };
 
@@ -58,8 +74,6 @@ const Recharge = () => {
           <h2 className="text-2xl font-bold text-foreground mb-1">Payment Successful!</h2>
           <p className="text-muted-foreground">Your wallet has been recharged</p>
         </div>
-
-        {/* Receipt card */}
         <div className="w-full max-w-sm glass-card rounded-2xl p-5 space-y-3 animate-fade-in-up" style={{ animationDelay: "0.2s" }}>
           <div className="text-center pb-3 border-b border-border/30">
             <p className="text-3xl font-bold text-success">+{kwhPreview} kWh</p>
@@ -68,7 +82,6 @@ const Recharge = () => {
           {[
             ["Amount Paid", `KES ${parseFloat(amount).toLocaleString()}`],
             ["Units Added", `${kwhPreview} kWh`],
-            ["New Balance", "111.9 kWh"],
             ["Transaction ID", txId],
             ["Status", "Confirmed"],
           ].map(([label, val]) => (
@@ -78,11 +91,7 @@ const Recharge = () => {
             </div>
           ))}
         </div>
-
-        <Button
-          onClick={() => { setPayState("idle"); setAmount(""); }}
-          className="w-full max-w-sm h-13 gradient-cyan text-[hsl(var(--navy))] font-bold rounded-xl"
-        >
+        <Button onClick={() => { setPayState("idle"); setAmount(""); navigate("/"); }} className="w-full max-w-sm h-13 gradient-cyan text-[hsl(var(--navy))] font-bold rounded-xl">
           Done
         </Button>
       </div>
@@ -99,9 +108,7 @@ const Recharge = () => {
           <h2 className="text-2xl font-bold text-foreground mb-1">Payment Failed</h2>
           <p className="text-muted-foreground text-sm">The STK push was cancelled or timed out.</p>
         </div>
-        <Button onClick={() => setPayState("idle")} className="gradient-cyan text-[hsl(var(--navy))] font-bold rounded-xl px-8 h-12">
-          Try Again
-        </Button>
+        <Button onClick={() => setPayState("idle")} className="gradient-cyan text-[hsl(var(--navy))] font-bold rounded-xl px-8 h-12">Try Again</Button>
       </div>
     );
   }
@@ -110,7 +117,6 @@ const Recharge = () => {
     <div className="min-h-screen gradient-navy pb-24">
       <div className="absolute top-0 right-0 w-72 h-72 rounded-full bg-primary/5 blur-3xl pointer-events-none" />
 
-      {/* Header */}
       <div className="px-5 pt-14 pb-4 flex items-center gap-3 animate-fade-in">
         <button onClick={() => navigate("/")} className="p-2 rounded-xl hover:bg-muted/30 transition-colors">
           <ArrowLeft className="w-5 h-5 text-foreground" />
@@ -119,54 +125,35 @@ const Recharge = () => {
       </div>
 
       <div className="px-5 space-y-5">
-        {/* Current balance */}
         <div className="glass-card rounded-2xl p-4 flex items-center justify-between animate-fade-in-up">
           <div>
             <p className="text-xs text-muted-foreground">Current Balance</p>
-            <p className="text-2xl font-bold text-primary">87.4 kWh</p>
-            <p className="text-xs text-muted-foreground">≈ KES 1,785</p>
+            <p className="text-2xl font-bold text-primary">{walletBalance} kWh</p>
+            <p className="text-xs text-muted-foreground">≈ KES {(walletBalance * KES_PER_KWH).toFixed(0)}</p>
           </div>
           <div className="text-right">
             <p className="text-xs text-muted-foreground">Est. days</p>
-            <p className="text-2xl font-bold text-success">12</p>
+            <p className="text-2xl font-bold text-success">{daysLeft}</p>
           </div>
         </div>
 
-        {/* Preset amounts */}
         <div className="animate-fade-in-up" style={{ animationDelay: "0.1s" }}>
           <p className="text-sm font-medium text-muted-foreground mb-3">Quick amounts (KES)</p>
           <div className="flex flex-wrap gap-2">
             {PRESETS.map((p) => (
-              <button
-                key={p}
-                onClick={() => setAmount(p.toString())}
-                className={`px-4 py-2.5 rounded-xl text-sm font-semibold border transition-all active:scale-95 ${
-                  amount === p.toString()
-                    ? "bg-primary/20 border-primary text-primary glow-cyan"
-                    : "glass-card border-border/30 text-foreground"
-                }`}
-              >
+              <button key={p} onClick={() => setAmount(p.toString())} className={`px-4 py-2.5 rounded-xl text-sm font-semibold border transition-all active:scale-95 ${amount === p.toString() ? "bg-primary/20 border-primary text-primary glow-cyan" : "glass-card border-border/30 text-foreground"}`}>
                 {p.toLocaleString()}
               </button>
             ))}
           </div>
         </div>
 
-        {/* Custom amount */}
         <div className="animate-fade-in-up" style={{ animationDelay: "0.15s" }}>
           <p className="text-sm font-medium text-muted-foreground mb-2">Custom amount</p>
           <div className="relative">
             <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground font-medium">KES</span>
-            <input
-              type="number"
-              placeholder="Enter amount"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              className="w-full pl-14 pr-4 py-4 glass-card rounded-xl border border-border/50 bg-transparent text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/50 text-lg font-bold transition-colors"
-            />
+            <input type="number" placeholder="Enter amount" value={amount} onChange={(e) => setAmount(e.target.value)} className="w-full pl-14 pr-4 py-4 glass-card rounded-xl border border-border/50 bg-transparent text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/50 text-lg font-bold transition-colors" />
           </div>
-
-          {/* kWh preview */}
           {amount && (
             <div className="mt-3 glass-card rounded-xl p-3 flex items-center justify-between border border-primary/20 animate-scale-in">
               <span className="text-sm text-muted-foreground">You'll receive</span>
@@ -175,31 +162,19 @@ const Recharge = () => {
           )}
         </div>
 
-        {/* Phone number */}
         <div className="animate-fade-in-up" style={{ animationDelay: "0.2s" }}>
           <p className="text-sm font-medium text-muted-foreground mb-2">M-Pesa number</p>
           <div className="relative">
             <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <input
-              type="tel"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              className="w-full pl-11 pr-4 py-4 glass-card rounded-xl border border-border/50 bg-transparent text-foreground focus:outline-none focus:border-primary/50 font-medium transition-colors"
-            />
+            <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} className="w-full pl-11 pr-4 py-4 glass-card rounded-xl border border-border/50 bg-transparent text-foreground focus:outline-none focus:border-primary/50 font-medium transition-colors" />
           </div>
         </div>
 
-        {/* Rate info */}
         <div className="glass-card rounded-xl p-3 border border-border/20 animate-fade-in-up" style={{ animationDelay: "0.25s" }}>
           <p className="text-xs text-muted-foreground text-center">Current rate: <span className="text-foreground font-medium">KES {KES_PER_KWH}/kWh</span> · No transaction fees</p>
         </div>
 
-        <Button
-          onClick={handlePay}
-          disabled={!amount || parseFloat(amount) < 10}
-          className="w-full h-14 gradient-cyan text-[hsl(var(--navy))] font-bold text-base rounded-xl glow-cyan hover:opacity-90 transition-all disabled:opacity-40 animate-fade-in-up"
-          style={{ animationDelay: "0.3s" }}
-        >
+        <Button onClick={handlePay} disabled={!amount || parseFloat(amount) < 10} className="w-full h-14 gradient-cyan text-[hsl(var(--navy))] font-bold text-base rounded-xl glow-cyan hover:opacity-90 transition-all disabled:opacity-40 animate-fade-in-up" style={{ animationDelay: "0.3s" }}>
           Confirm & Pay via M-Pesa
         </Button>
       </div>

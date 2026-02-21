@@ -1,22 +1,32 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Bell, Zap, TrendingUp, TrendingDown, ArrowRight, Battery, Wifi, Lightbulb, AlertCircle } from "lucide-react";
+import { Bell, Zap, TrendingUp, TrendingDown, ArrowRight, Battery, Wifi, WifiOff, Lightbulb, AlertCircle } from "lucide-react";
 import BottomNav from "@/components/BottomNav";
 import { useTheme } from "@/components/ThemeProvider";
+import { useAuth } from "@/hooks/useAuth";
+import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 
-const mockTransactions = [
-  { id: 1, type: "recharge", label: "M-Pesa Recharge", amount: "+24.5 kWh", value: "+KES 500", time: "2h ago", icon: "💳", color: "text-success" },
-  { id: 2, type: "usage", label: "Daily Consumption", amount: "-3.2 kWh", value: "-KES 65", time: "5h ago", icon: "⚡", color: "text-destructive" },
-  { id: 3, type: "transfer", label: "Transfer to James", amount: "-5.0 kWh", value: "-KES 102", time: "1d ago", icon: "🔄", color: "text-accent" },
-];
+interface Wallet {
+  balance_kwh: number;
+  max_kwh: number;
+}
 
-// Wallet balance mock data
-const WALLET = { balance: 87.4, max: 200, daily_avg: 7.2, days_left: 12, vs_yesterday: 18 };
+interface Meter {
+  id: string;
+  name: string;
+  property_name: string | null;
+  status: string;
+  tuya_device_id: string;
+  balance_kwh: number;
+  max_kwh: number;
+  rate_kwh_hr: number | null;
+  last_sync: string | null;
+  sms_fallback: boolean;
+}
 
-// Circular energy gauge
 const EnergyGauge = ({ balance, max }: { balance: number; max: number }) => {
-  const pct = Math.min(100, Math.round((balance / max) * 100));
+  const pct = max > 0 ? Math.min(100, Math.round((balance / max) * 100)) : 0;
   const r = 52;
   const circ = 2 * Math.PI * r;
   const offset = circ - (circ * pct) / 100;
@@ -48,37 +58,66 @@ const EnergyGauge = ({ balance, max }: { balance: number; max: number }) => {
 const Home = () => {
   const navigate = useNavigate();
   const { theme } = useTheme();
-  const [notifCount] = useState(3);
-  const pct = Math.min(100, Math.round((WALLET.balance / WALLET.max) * 100));
+  const { profile } = useAuth();
+  const [wallet, setWallet] = useState<Wallet | null>(null);
+  const [meters, setMeters] = useState<Meter[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      const [walletRes, metersRes] = await Promise.all([
+        supabase.from("wallets").select("*").maybeSingle(),
+        supabase.from("meters").select("*").order("created_at", { ascending: false }),
+      ]);
+      setWallet(walletRes.data ?? { balance_kwh: 0, max_kwh: 200 });
+      setMeters(metersRes.data ?? []);
+      setLoading(false);
+    };
+    fetchData();
+  }, []);
+
+  const balance = wallet?.balance_kwh ?? 0;
+  const max = wallet?.max_kwh ?? 200;
+  const pct = max > 0 ? Math.min(100, Math.round((balance / max) * 100)) : 0;
   const isLow = pct < 20;
+  const dailyAvg = 7.2; // TODO: compute from real usage logs
+  const daysLeft = dailyAvg > 0 ? Math.round(balance / dailyAvg) : 0;
+
+  const firstName = profile?.full_name?.split(" ")[0] || "User";
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? "Good morning ☀️" : hour < 17 ? "Good afternoon 🌤️" : "Good evening 🌙";
+
+  const activeMeter = meters[0];
+
+  if (loading) {
+    return (
+      <div className="min-h-screen gradient-navy flex items-center justify-center">
+        <div className="w-10 h-10 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <div className={cn("min-h-screen pb-24 relative", theme === "dark" ? "gradient-navy" : "bg-background")}>
-      {/* Orbs */}
       <div className="absolute top-0 right-0 w-80 h-80 rounded-full bg-primary/5 blur-3xl pointer-events-none" />
       <div className="absolute top-60 left-0 w-60 h-60 rounded-full bg-accent/5 blur-3xl pointer-events-none" />
 
       {/* Header */}
       <div className="px-5 pt-14 pb-4 flex items-center justify-between animate-fade-in">
         <div>
-          <p className="text-muted-foreground text-sm">Good morning ☀️</p>
-          <h2 className="text-xl font-bold text-foreground">James Kamau</h2>
+          <p className="text-muted-foreground text-sm">{greeting}</p>
+          <h2 className="text-xl font-bold text-foreground">{firstName}</h2>
         </div>
         <button
           onClick={() => navigate("/notifications")}
           className="relative p-2.5 glass-card rounded-xl border border-border/30"
         >
           <Bell className="w-5 h-5 text-foreground" />
-          {notifCount > 0 && (
-            <span className="absolute -top-1 -right-1 w-5 h-5 bg-accent rounded-full text-[10px] font-bold flex items-center justify-center text-[hsl(var(--navy))]">
-              {notifCount}
-            </span>
-          )}
         </button>
       </div>
 
       <div className="px-5 space-y-4">
-        {/* Wallet card — shows percentage prominently */}
+        {/* Wallet card */}
         <div
           className="relative overflow-hidden rounded-2xl p-5 animate-fade-in-up"
           style={{
@@ -90,23 +129,15 @@ const Home = () => {
           <div className="absolute inset-0 opacity-20" style={{ background: "linear-gradient(105deg, transparent 40%, rgba(0,212,255,0.12) 50%, transparent 60%)" }} />
 
           <div className="relative flex items-center gap-5">
-            {/* Circular gauge */}
-            <EnergyGauge balance={WALLET.balance} max={WALLET.max} />
-
-            {/* Right side info */}
+            <EnergyGauge balance={balance} max={max} />
             <div className="flex-1">
               <p className="text-xs text-primary/70 uppercase tracking-widest mb-1">Energy Wallet</p>
-
-              {/* Large % display */}
               <div className="flex items-end gap-1.5 mb-0.5">
-                <span className={`text-5xl font-bold glow-cyan-text ${isLow ? "text-destructive" : "text-foreground"}`}>
-                  {pct}
-                </span>
+                <span className={`text-5xl font-bold glow-cyan-text ${isLow ? "text-destructive" : "text-foreground"}`}>{pct}</span>
                 <span className="text-primary font-semibold text-xl mb-1.5">%</span>
               </div>
-              <p className="text-muted-foreground text-xs">{WALLET.balance} kWh · ≈ KES {(WALLET.balance * 20.43).toFixed(0)}</p>
+              <p className="text-muted-foreground text-xs">{balance} kWh · ≈ KES {(balance * 20.43).toFixed(0)}</p>
 
-              {/* Low balance warning */}
               {isLow && (
                 <div className="flex items-center gap-1.5 mt-2 bg-destructive/15 rounded-lg px-2.5 py-1.5 border border-destructive/20">
                   <AlertCircle className="w-3.5 h-3.5 text-destructive shrink-0" />
@@ -114,87 +145,89 @@ const Home = () => {
                 </div>
               )}
 
-              {/* Stats */}
               <div className="flex gap-2 mt-3">
                 <div className="glass rounded-lg px-2.5 py-1.5 border border-white/5">
                   <div className="flex items-center gap-1 mb-0.5">
                     <Battery className="w-3 h-3 text-success" />
                     <span className="text-[9px] text-muted-foreground uppercase">Est.</span>
                   </div>
-                  <span className="text-base font-bold text-success">{WALLET.days_left}d</span>
+                  <span className="text-base font-bold text-success">{daysLeft}d</span>
                 </div>
                 <div className="glass rounded-lg px-2.5 py-1.5 border border-white/5">
                   <div className="flex items-center gap-1 mb-0.5">
                     <TrendingDown className="w-3 h-3 text-primary" />
                     <span className="text-[9px] text-muted-foreground uppercase">Avg</span>
                   </div>
-                  <span className="text-base font-bold text-foreground">{WALLET.daily_avg} <span className="text-[9px]">kWh</span></span>
+                  <span className="text-base font-bold text-foreground">{dailyAvg} <span className="text-[9px]">kWh</span></span>
                 </div>
                 <div className="glass rounded-lg px-2.5 py-1.5 border border-white/5">
                   <div className="flex items-center gap-1 mb-0.5">
                     <TrendingUp className="w-3 h-3 text-accent" />
-                    <span className="text-[9px] text-muted-foreground uppercase">vs yest</span>
+                    <span className="text-[9px] text-muted-foreground uppercase">Meters</span>
                   </div>
-                  <span className="text-base font-bold text-accent">+{WALLET.vs_yesterday}%</span>
+                  <span className="text-base font-bold text-accent">{meters.length}</span>
                 </div>
               </div>
             </div>
           </div>
         </div>
 
-        {/* Active meter */}
-        <div className="glass-card rounded-2xl p-4 animate-fade-in-up" style={{ animationDelay: "0.1s" }}>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-primary/15 flex items-center justify-center">
-                <Zap className="w-5 h-5 text-primary" />
-              </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <p className="text-sm font-semibold text-foreground">Nairobi Apartment</p>
-                  <span className="flex items-center gap-1 text-[10px] bg-success/15 text-success rounded-full px-2 py-0.5">
-                    <Wifi className="w-2.5 h-2.5" /> Online
-                  </span>
+        {/* Active meter or empty state */}
+        {activeMeter ? (
+          <div className="glass-card rounded-2xl p-4 animate-fade-in-up" style={{ animationDelay: "0.1s" }}>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-primary/15 flex items-center justify-center">
+                  <Zap className="w-5 h-5 text-primary" />
                 </div>
-                <p className="text-xs text-muted-foreground/70 font-mono mt-0.5">eb5f6f5cbf5f7c6f39pjoa</p>
-                <p className="text-xs text-muted-foreground mt-0.5">Karen Estate · 0.45 kWh/hr</p>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-semibold text-foreground">{activeMeter.name}</p>
+                    <span className={`flex items-center gap-1 text-[10px] rounded-full px-2 py-0.5 ${
+                      activeMeter.status === "online" ? "bg-success/15 text-success" : "bg-destructive/15 text-destructive"
+                    }`}>
+                      {activeMeter.status === "online" ? <Wifi className="w-2.5 h-2.5" /> : <WifiOff className="w-2.5 h-2.5" />}
+                      {activeMeter.status === "online" ? "Online" : "Offline"}
+                    </span>
+                  </div>
+                  <p className="text-xs text-muted-foreground/70 font-mono mt-0.5">{activeMeter.tuya_device_id.slice(0, 16)}…</p>
+                  {activeMeter.property_name && (
+                    <p className="text-xs text-muted-foreground mt-0.5">{activeMeter.property_name}</p>
+                  )}
+                </div>
               </div>
-            </div>
-            <button onClick={() => navigate("/meters")} className="text-primary">
-              <ArrowRight className="w-4 h-4" />
-            </button>
-          </div>
-
-          {/* Mini progress bar on meter card */}
-          <div className="mt-3">
-            <div className="flex justify-between mb-1">
-              <span className="text-[9px] text-muted-foreground uppercase">Balance</span>
-              <span className="text-[9px] text-primary font-semibold">{pct}%</span>
-            </div>
-            <div className="w-full h-1.5 rounded-full bg-muted/30">
-              <div
-                className="h-1.5 rounded-full gradient-cyan transition-all"
-                style={{ width: `${pct}%` }}
-              />
+              <button onClick={() => navigate("/meters")} className="text-primary">
+                <ArrowRight className="w-4 h-4" />
+              </button>
             </div>
           </div>
-        </div>
+        ) : (
+          <button
+            onClick={() => navigate("/meters")}
+            className="glass-card rounded-2xl p-5 w-full text-center animate-fade-in-up border-2 border-dashed border-primary/20 hover:border-primary/40 transition-all"
+            style={{ animationDelay: "0.1s" }}
+          >
+            <Zap className="w-8 h-8 text-primary/50 mx-auto mb-2" />
+            <p className="text-sm font-semibold text-foreground">No meters linked</p>
+            <p className="text-xs text-muted-foreground mt-1">Tap to add your first Tuya smart meter</p>
+          </button>
+        )}
 
         {/* Smart insight */}
         <div className="flex gap-3 animate-fade-in-up" style={{ animationDelay: "0.15s" }}>
           <div className="glass-card rounded-2xl p-4 flex-1 flex flex-col justify-between border-l-2 border-accent">
             <Lightbulb className="w-5 h-5 text-accent mb-2" />
             <p className="text-xs text-foreground leading-relaxed">
-              You used <span className="text-accent font-bold">18% more</span> than yesterday
+              You have <span className="text-accent font-bold">{meters.length} meter{meters.length !== 1 ? "s" : ""}</span> linked
             </p>
-            <p className="text-[10px] text-muted-foreground mt-1">Power lasts <span className="text-success font-medium">{WALLET.days_left} days</span> at current rate</p>
+            <p className="text-[10px] text-muted-foreground mt-1">Power lasts <span className="text-success font-medium">{daysLeft} days</span> at current rate</p>
           </div>
           <div className="glass-card rounded-2xl p-4 flex-1 border-l-2 border-primary">
-            <p className="text-[10px] text-muted-foreground mb-1">Peak hour today</p>
-            <p className="text-sm font-bold text-foreground">6:00 PM</p>
-            <p className="text-[10px] text-primary mt-0.5">1.2 kWh consumed</p>
-            <p className="text-[10px] text-muted-foreground mt-2">Capacity remaining</p>
-            <p className="text-sm font-bold text-foreground">{WALLET.max - WALLET.balance} kWh</p>
+            <p className="text-[10px] text-muted-foreground mb-1">Wallet capacity</p>
+            <p className="text-sm font-bold text-foreground">{max} kWh</p>
+            <p className="text-[10px] text-primary mt-0.5">{balance} kWh used</p>
+            <p className="text-[10px] text-muted-foreground mt-2">Remaining</p>
+            <p className="text-sm font-bold text-foreground">{(max - balance).toFixed(1)} kWh</p>
           </div>
         </div>
 
@@ -216,31 +249,6 @@ const Home = () => {
                 <span className="text-2xl">{icon}</span>
                 <span className="text-[10px] font-medium text-foreground">{label}</span>
               </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Recent transactions */}
-        <div className="animate-fade-in-up" style={{ animationDelay: "0.25s" }}>
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Recent Transactions</h3>
-            <button className="text-xs text-primary font-medium">See all</button>
-          </div>
-          <div className="glass-card rounded-2xl overflow-hidden">
-            {mockTransactions.map((tx, i) => (
-              <div key={tx.id} className={`flex items-center gap-3 p-4 ${i < mockTransactions.length - 1 ? "border-b border-border/30" : ""}`}>
-                <div className="w-10 h-10 rounded-xl bg-muted/50 flex items-center justify-center text-xl">
-                  {tx.icon}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-foreground truncate">{tx.label}</p>
-                  <p className="text-xs text-muted-foreground">{tx.time}</p>
-                </div>
-                <div className="text-right">
-                  <p className={`text-sm font-bold ${tx.color}`}>{tx.amount}</p>
-                  <p className="text-xs text-muted-foreground">{tx.value}</p>
-                </div>
-              </div>
             ))}
           </div>
         </div>
