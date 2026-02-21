@@ -1,24 +1,43 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, ChevronRight, Moon, Sun, Fingerprint, Shield, Bell, HelpCircle, LogOut, Zap, ChevronDown } from "lucide-react";
+import { ChevronRight, Moon, Sun, Fingerprint, Shield, Bell, HelpCircle, LogOut, Zap } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import BottomNav from "@/components/BottomNav";
 import { useTheme } from "@/components/ThemeProvider";
+import { useAuth } from "@/hooks/useAuth";
+import { supabase } from "@/integrations/supabase/client";
 
 const Profile = () => {
   const navigate = useNavigate();
   const { theme, toggleTheme } = useTheme();
+  const { profile, signOut } = useAuth();
   const [biometric, setBiometric] = useState(false);
-  const [notifPrefs, setNotifPrefs] = useState({
-    lowBalance: true,
-    meterOffline: true,
-    paymentConfirmed: true,
-    abnormalUsage: false,
-    overconsumption: true,
-  });
+  const [meterCount, setMeterCount] = useState(0);
+  const [walletBalance, setWalletBalance] = useState(0);
 
-  const toggleNotif = (key: keyof typeof notifPrefs) =>
-    setNotifPrefs((p) => ({ ...p, [key]: !p[key] }));
+  useEffect(() => {
+    const fetchStats = async () => {
+      const [metersRes, walletRes] = await Promise.all([
+        supabase.from("meters").select("id", { count: "exact", head: true }),
+        supabase.from("wallets").select("balance_kwh").maybeSingle(),
+      ]);
+      setMeterCount(metersRes.count ?? 0);
+      setWalletBalance(walletRes.data?.balance_kwh ?? 0);
+    };
+    fetchStats();
+  }, []);
+
+  const initials = (profile?.full_name || "U")
+    .split(" ")
+    .map((n) => n[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2);
+
+  const handleLogout = async () => {
+    await signOut();
+    navigate("/auth/register", { replace: true });
+  };
 
   const Section = ({ title, children }: { title: string; children: React.ReactNode }) => (
     <div className="animate-fade-in-up">
@@ -53,24 +72,20 @@ const Profile = () => {
           <div className="flex items-center gap-4">
             <div className="relative">
               <div className="w-16 h-16 rounded-2xl gradient-cyan flex items-center justify-center text-2xl font-bold text-[hsl(var(--navy))]">
-                JK
+                {initials}
               </div>
               <div className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-success border-2 border-background" />
             </div>
             <div className="flex-1">
-              <div className="flex items-center gap-2">
-                <h2 className="text-lg font-bold text-foreground">James Kamau</h2>
-                <span className="text-[10px] bg-primary/20 text-primary rounded-full px-2 py-0.5 font-bold">PRO</span>
-              </div>
-              <p className="text-sm text-muted-foreground">+254 712 345 678</p>
-              <p className="text-xs text-muted-foreground mt-0.5">Member since Jan 2024</p>
+              <h2 className="text-lg font-bold text-foreground">{profile?.full_name || "User"}</h2>
+              <p className="text-sm text-muted-foreground">{profile?.phone || ""}</p>
             </div>
           </div>
           <div className="mt-4 grid grid-cols-3 gap-2">
             {[
-              { label: "Balance", val: "87.4 kWh" },
-              { label: "Meters", val: "2 linked" },
-              { label: "Transfers", val: "KES 4.2K" },
+              { label: "Balance", val: `${walletBalance} kWh` },
+              { label: "Meters", val: `${meterCount} linked` },
+              { label: "PIN", val: profile?.pin_hash ? "Set ✓" : "Not set" },
             ].map(({ label, val }) => (
               <div key={label} className="glass rounded-xl p-2.5 border border-white/5 text-center">
                 <p className="text-[9px] text-muted-foreground uppercase">{label}</p>
@@ -80,51 +95,19 @@ const Profile = () => {
           </div>
         </div>
 
-        {/* Security */}
         <Section title="Security">
-          <MenuItem icon={Shield} label="Change PIN" />
+          <MenuItem icon={Shield} label="Change PIN" onClick={() => navigate("/auth/pin")} />
           <MenuItem
             icon={Fingerprint}
             label="Biometric Auth"
-            right={
-              <Switch
-                checked={biometric}
-                onCheckedChange={setBiometric}
-                className="data-[state=checked]:bg-primary"
-              />
-            }
+            right={<Switch checked={biometric} onCheckedChange={setBiometric} className="data-[state=checked]:bg-primary" />}
           />
-          <MenuItem icon={Shield} label="Active Sessions" right={<span className="text-xs text-primary mr-2">2 devices</span>} />
         </Section>
 
-        {/* Meters */}
         <Section title="Linked Meters">
-          <MenuItem icon={Zap} label="Manage Meters" right={<span className="text-xs text-muted-foreground mr-2">2 linked</span>}
-            onClick={() => navigate("/meters")} />
+          <MenuItem icon={Zap} label="Manage Meters" right={<span className="text-xs text-muted-foreground mr-2">{meterCount} linked</span>} onClick={() => navigate("/meters")} />
         </Section>
 
-        {/* Notifications */}
-        <Section title="Notification Preferences">
-          {[
-            { key: "lowBalance", icon: "🟡", label: "Low Balance Alert" },
-            { key: "meterOffline", icon: "🔴", label: "Meter Offline" },
-            { key: "paymentConfirmed", icon: "🟢", label: "Payment Confirmed" },
-            { key: "abnormalUsage", icon: "🟠", label: "Abnormal Usage" },
-            { key: "overconsumption", icon: "⚪", label: "Overconsumption Warning" },
-          ].map(({ key, icon, label }) => (
-            <div key={key} className="flex items-center gap-3 px-4 py-3.5 border-b border-border/20 last:border-0">
-              <span className="text-lg">{icon}</span>
-              <span className="flex-1 text-sm font-medium text-foreground">{label}</span>
-              <Switch
-                checked={notifPrefs[key as keyof typeof notifPrefs]}
-                onCheckedChange={() => toggleNotif(key as keyof typeof notifPrefs)}
-                className="data-[state=checked]:bg-primary"
-              />
-            </div>
-          ))}
-        </Section>
-
-        {/* App settings */}
         <Section title="App Settings">
           <div className="flex items-center gap-3 px-4 py-4 border-b border-border/20">
             <div className="w-9 h-9 rounded-xl bg-muted/30 flex items-center justify-center">
@@ -133,31 +116,15 @@ const Profile = () => {
             <span className="flex-1 text-sm font-medium text-foreground">{theme === "dark" ? "Dark Mode" : "Light Mode"}</span>
             <Switch checked={theme === "dark"} onCheckedChange={toggleTheme} className="data-[state=checked]:bg-primary" />
           </div>
-          <div className="px-4 py-4">
-            <p className="text-xs text-muted-foreground mb-2">Transaction Limits</p>
-            <div className="space-y-1">
-              <div className="flex justify-between"><span className="text-xs text-muted-foreground">Daily transfer limit</span><span className="text-xs font-medium text-foreground">50 kWh</span></div>
-              <div className="flex justify-between"><span className="text-xs text-muted-foreground">Daily recharge limit</span><span className="text-xs font-medium text-foreground">KES 10,000</span></div>
-            </div>
-          </div>
         </Section>
 
-        {/* Help */}
         <Section title="Support">
           <MenuItem icon={HelpCircle} label="FAQ & Help" />
           <MenuItem icon={HelpCircle} label="Contact Support" />
-          <MenuItem icon={HelpCircle} label="Report an Issue" />
         </Section>
 
-        {/* Logout */}
         <Section title="Account">
-          <MenuItem
-            icon={LogOut}
-            label="Logout"
-            danger
-            onClick={() => navigate("/auth/phone")}
-            right={null}
-          />
+          <MenuItem icon={LogOut} label="Logout" danger onClick={handleLogout} right={null} />
         </Section>
 
         <p className="text-center text-xs text-muted-foreground pb-2">PowerFlow v1.0.0 · Made with ⚡ in Kenya</p>
