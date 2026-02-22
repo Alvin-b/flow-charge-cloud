@@ -33,15 +33,15 @@ export default defineConfig(({ mode }) => ({
         icons: [
           { src: "/favicon.ico", sizes: "48x48", type: "image/x-icon" },
           {
-            src: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'%3E%3Crect width='192' height='192' rx='40' fill='%230A0F1E'/%3E%3Cpolygon points='110,20 60,100 96,100 82,172 148,80 108,80' fill='%2300D4FF'/%3E%3C/svg%3E",
+            src: "/icons/icon-192.png",
             sizes: "192x192",
-            type: "image/svg+xml",
+            type: "image/png",
             purpose: "any maskable",
           },
           {
-            src: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='80' fill='%230A0F1E'/%3E%3Cpolygon points='300,50 160,260 256,260 220,462 390,210 288,210' fill='%2300D4FF'/%3E%3C/svg%3E",
+            src: "/icons/icon-512.png",
             sizes: "512x512",
-            type: "image/svg+xml",
+            type: "image/png",
             purpose: "any maskable",
           },
         ],

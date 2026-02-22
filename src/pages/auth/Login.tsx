@@ -1,49 +1,30 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowRight, Zap, User, Mail, Lock, Eye, EyeOff } from "lucide-react";
+import { ArrowRight, Zap, Mail, Lock, Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 
-const Register = () => {
+const Login = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  const canContinue = fullName.trim().length >= 2 && email.includes("@") && password.length >= 6;
+  const canContinue = email.includes("@") && password.length >= 6;
 
-  const handleContinue = async () => {
+  const handleLogin = async () => {
     if (!canContinue) return;
     setLoading(true);
     try {
-      const { data, error } = await supabase.auth.signUp({
+      const { error } = await supabase.auth.signInWithPassword({
         email: email.trim(),
         password,
-        options: {
-          emailRedirectTo: window.location.origin,
-          data: { full_name: fullName.trim() },
-        },
       });
       if (error) throw error;
-
-      // Create profile
-      if (data.user) {
-        await supabase.from("profiles").upsert({
-          user_id: data.user.id,
-          full_name: fullName.trim(),
-          email: email.trim(),
-        }, { onConflict: "user_id" });
-      }
-
-      toast({
-        title: "Check your email",
-        description: "We sent a confirmation link to verify your account.",
-      });
-      navigate("/auth/login");
+      navigate("/", { replace: true });
     } catch (err: any) {
       toast({ title: "Error", description: err.message, variant: "destructive" });
     } finally {
@@ -67,26 +48,11 @@ const Register = () => {
 
       <div className="flex-1 flex flex-col justify-center px-6 -mt-8">
         <div className="animate-fade-in-up" style={{ animationDelay: "0.1s" }}>
-          <h1 className="text-3xl font-bold text-foreground mb-1">Create account</h1>
-          <p className="text-muted-foreground text-sm">Sign up to manage your energy wallet</p>
+          <h1 className="text-3xl font-bold text-foreground mb-2">Welcome back</h1>
+          <p className="text-muted-foreground">Sign in to your energy wallet</p>
         </div>
 
         <div className="mt-10 space-y-4 animate-fade-in-up" style={{ animationDelay: "0.2s" }}>
-          {/* Full name */}
-          <div>
-            <label className="text-sm font-medium text-muted-foreground mb-2 block">Full Name</label>
-            <div className="relative">
-              <User className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <input
-                type="text"
-                placeholder="e.g. James Kamau"
-                value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
-                className="w-full pl-10 pr-4 py-3.5 glass-card rounded-xl border border-border/50 bg-transparent text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/50 transition-colors text-base"
-              />
-            </div>
-          </div>
-
           {/* Email */}
           <div>
             <label className="text-sm font-medium text-muted-foreground mb-2 block">Email</label>
@@ -109,7 +75,7 @@ const Register = () => {
               <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <input
                 type={showPassword ? "text" : "password"}
-                placeholder="Min 6 characters"
+                placeholder="Your password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className="w-full pl-10 pr-12 py-3.5 glass-card rounded-xl border border-border/50 bg-transparent text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/50 transition-colors text-base"
@@ -124,40 +90,28 @@ const Register = () => {
             </div>
           </div>
 
-          <div className="glass-card rounded-xl p-4 border border-accent/20">
-            <p className="text-xs text-muted-foreground leading-relaxed">
-              🔒 <span className="text-foreground font-medium">Secure Account:</span> We'll send a confirmation email to verify your address. Your wallet will be created automatically.
-            </p>
-          </div>
-
           <Button
-            onClick={handleContinue}
+            onClick={handleLogin}
             disabled={!canContinue || loading}
             className="w-full h-14 gradient-cyan text-[hsl(var(--navy))] font-bold text-base rounded-xl glow-cyan hover:opacity-90 transition-all duration-200 disabled:opacity-40"
           >
             {loading ? (
               <div className="w-5 h-5 border-2 border-[hsl(var(--navy))] border-t-transparent rounded-full animate-spin" />
             ) : (
-              <>Create Account <ArrowRight className="w-5 h-5 ml-1" /></>
+              <>Sign In <ArrowRight className="w-5 h-5 ml-1" /></>
             )}
           </Button>
         </div>
 
         <p className="text-center text-xs text-muted-foreground mt-8 animate-fade-in-up" style={{ animationDelay: "0.3s" }}>
-          Already have an account?{" "}
-          <button onClick={() => navigate("/auth/login")} className="text-primary font-medium hover:underline">
-            Sign in
+          Don't have an account?{" "}
+          <button onClick={() => navigate("/auth/register")} className="text-primary font-medium hover:underline">
+            Sign up
           </button>
-        </p>
-
-        <p className="text-center text-xs text-muted-foreground mt-3 animate-fade-in-up" style={{ animationDelay: "0.35s" }}>
-          By continuing, you agree to our{" "}
-          <span className="text-primary">Terms of Service</span> and{" "}
-          <span className="text-primary">Privacy Policy</span>
         </p>
       </div>
     </div>
   );
 };
 
-export default Register;
+export default Login;

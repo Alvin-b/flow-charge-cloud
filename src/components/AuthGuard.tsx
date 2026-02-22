@@ -13,7 +13,7 @@ const AuthGuard = ({ children }: { children: ReactNode }) => {
     );
   }
 
-  if (!user) return <Navigate to="/auth/register" replace />;
+  if (!user) return <Navigate to="/auth/login" replace />;
 
   // If logged in but no PIN set yet, redirect to PIN setup
   if (!profile?.pin_hash) return <Navigate to="/auth/pin" replace />;
