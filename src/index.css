@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -45,6 +47,7 @@
     --success: 142 76% 45%;
     --warning: 38 92% 50%;
     --danger: 0 84% 60%;
+    --purple: 270 70% 60%;
 
     --sidebar-background: 0 0% 98%;
     --sidebar-foreground: 240 5.3% 26.1%;
@@ -103,7 +106,7 @@
   }
   body {
     @apply bg-background text-foreground;
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-family: 'Space Grotesk', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     overflow-x: hidden;
@@ -134,6 +137,14 @@
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255,255,255,0.08);
   }
 
+  .glass-card-elevated {
+    background: linear-gradient(145deg, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0.04) 100%);
+    backdrop-filter: blur(40px);
+    -webkit-backdrop-filter: blur(40px);
+    border: 1px solid rgba(0, 212, 255, 0.18);
+    box-shadow: 0 12px 48px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255,255,255,0.05), inset 0 1px 0 rgba(255,255,255,0.1);
+  }
+
   /* Cyan glow effects */
   .glow-cyan {
     box-shadow: 0 0 20px rgba(0, 212, 255, 0.3), 0 0 60px rgba(0, 212, 255, 0.1);
@@ -143,13 +154,17 @@
     text-shadow: 0 0 20px rgba(0, 212, 255, 0.5);
   }
 
+  .glow-cyan-strong {
+    box-shadow: 0 0 30px rgba(0, 212, 255, 0.4), 0 0 80px rgba(0, 212, 255, 0.15), 0 0 120px rgba(0, 212, 255, 0.05);
+  }
+
   .glow-amber {
     box-shadow: 0 0 20px rgba(245, 158, 11, 0.3);
   }
 
   /* Gradients */
   .gradient-navy {
-    background: linear-gradient(135deg, hsl(228, 65%, 5%) 0%, hsl(228, 50%, 12%) 100%);
+    background: linear-gradient(180deg, hsl(228, 65%, 5%) 0%, hsl(228, 50%, 8%) 50%, hsl(228, 45%, 6%) 100%);
   }
 
   .gradient-cyan {
@@ -158,6 +173,24 @@
 
   .gradient-wallet {
     background: linear-gradient(135deg, hsl(228, 50%, 12%) 0%, hsl(210, 60%, 18%) 50%, hsl(191, 60%, 16%) 100%);
+  }
+
+  .gradient-purple {
+    background: linear-gradient(135deg, hsl(270, 70%, 50%) 0%, hsl(300, 60%, 55%) 100%);
+  }
+
+  .gradient-mesh {
+    background: 
+      radial-gradient(ellipse at 20% 50%, rgba(0, 212, 255, 0.08) 0%, transparent 50%),
+      radial-gradient(ellipse at 80% 20%, rgba(147, 51, 234, 0.06) 0%, transparent 50%),
+      radial-gradient(ellipse at 50% 80%, rgba(245, 158, 11, 0.04) 0%, transparent 50%);
+  }
+
+  /* Shimmer loading effect */
+  .shimmer-overlay {
+    background: linear-gradient(105deg, transparent 40%, rgba(0,212,255,0.06) 45%, rgba(0,212,255,0.12) 50%, rgba(0,212,255,0.06) 55%, transparent 60%);
+    background-size: 200% 100%;
+    animation: shimmer 3s ease-in-out infinite;
   }
 
   /* Animated pulse for loading */
@@ -183,10 +216,10 @@
 
   /* Bottom nav blur */
   .bottom-nav {
-    background: rgba(10, 15, 30, 0.85);
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
-    border-top: 1px solid rgba(0, 212, 255, 0.1);
+    background: linear-gradient(to top, rgba(10, 15, 30, 0.95) 0%, rgba(10, 15, 30, 0.85) 100%);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    border-top: 1px solid rgba(0, 212, 255, 0.08);
   }
 
   .bottom-nav-light {
@@ -194,5 +227,24 @@
     backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);
     border-top: 1px solid rgba(0, 212, 255, 0.2);
+  }
+
+  /* Noise texture overlay */
+  .noise-overlay::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    opacity: 0.015;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 1;
+  }
+
+  /* Card hover micro-interaction */
+  .card-interactive {
+    transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s ease;
+  }
+  .card-interactive:active {
+    transform: scale(0.98);
   }
 }
