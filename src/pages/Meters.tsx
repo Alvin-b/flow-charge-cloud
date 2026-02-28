@@ -1,15 +1,16 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   ArrowLeft, Plus, Zap, Wifi, WifiOff, QrCode, X,
   ChevronRight, Link2Off, AlertCircle, CheckCircle2,
-  Building2, Wrench
+  Building2, Wrench, Camera
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import BottomNav from "@/components/BottomNav";
 import { meterApi } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { Html5Qrcode } from "html5-qrcode";
 
 interface ActiveConnection {
   connection_id: string;
@@ -67,6 +68,9 @@ const Meters = () => {
   const [meterCode, setMeterCode] = useState("");
   const [addStep, setAddStep] = useState<AddStep>("method");
   const [connectLoading, setConnectLoading] = useState(false);
+  const [scanning, setScanning] = useState(false);
+  const qrScannerRef = useRef<Html5Qrcode | null>(null);
+  const scannerInitialized = useRef(false);
 
   const fetchData = async () => {
     try {
@@ -85,11 +89,95 @@ const Meters = () => {
 
   useEffect(() => { fetchData(); }, []);
 
+  const stopScanning = async () => {
+    if (qrScannerRef.current && scannerInitialized.current) {
+      try {
+        await qrScannerRef.current.stop();
+        qrScannerRef.current.clear();
+        scannerInitialized.current = false;
+      } catch (err) {
+        console.error("Error stopping scanner:", err);
+      }
+    }
+    setScanning(false);
+  };
+
   const closeModal = () => {
+    stopScanning();
     setModal(null);
     setAddStep("method");
     setMeterCode("");
   };
+
+  const startQRScanner = async () => {
+    setAddStep("scan");
+    setScanning(true);
+    
+    try {
+      // Initialize scanner
+      if (!qrScannerRef.current) {
+        qrScannerRef.current = new Html5Qrcode("qr-reader");
+      }
+
+      if (!scannerInitialized.current) {
+        // Get camera list first
+        const cameras = await Html5Qrcode.getCameras();
+        
+        if (!cameras || cameras.length === 0) {
+          throw new Error("No cameras found. Please check camera permissions.");
+        }
+
+        // Use back camera if available (for mobile), otherwise use first camera
+        const cameraId = cameras.find(c => c.label.toLowerCase().includes("back"))?.id || cameras[0].id;
+
+        await qrScannerRef.current.start(
+          cameraId,
+          {
+            fps: 10,
+            qrbox: { width: 250, height: 250 },
+          },
+          async (decodedText) => {
+            // QR code scanned successfully
+            console.log("QR Code detected:", decodedText);
+            
+            // Stop scanning
+            await stopScanning();
+            
+            // Set meter code and switch to manual entry (with pre-filled code)
+            setMeterCode(decodedText);
+            setAddStep("manual");
+            
+            toast({
+              title: "QR Code Scanned",
+              description: `Meter code: ${decodedText}`,
+            });
+          },
+          (errorMessage) => {
+            // QR scanning error (usually "No QR code found")
+            // Don't show toast for every frame - just keep scanning
+          }
+        );
+        
+        scannerInitialized.current = true;
+      }
+    } catch (err: any) {
+      console.error("QR Scanner error:", err);
+      toast({
+        title: "Camera Error",
+        description: err.message || "Unable to access camera. Please check permissions.",
+        variant: "destructive",
+      });
+      setAddStep("method");
+      setScanning(false);
+    }
+  };
+
+  // Cleanup scanner on unmount
+  useEffect(() => {
+    return () => {
+      stopScanning();
+    };
+  }, []);
 
   const handleConnect = async () => {
     if (!meterCode.trim()) return;
@@ -303,7 +391,7 @@ const Meters = () => {
 
             {addStep === "method" && (
               <div className="space-y-3">
-                <button onClick={() => setAddStep("scan")} className="w-full flex items-center gap-4 p-4 glass rounded-2xl border border-primary/20 hover:border-primary/40 transition-all text-left">
+                <button onClick={startQRScanner} className="w-full flex items-center gap-4 p-4 glass rounded-2xl border border-primary/20 hover:border-primary/40 transition-all text-left">
                   <div className="w-12 h-12 rounded-xl bg-primary/15 flex items-center justify-center shrink-0">
                     <QrCode className="w-6 h-6 text-primary" />
                   </div>
@@ -328,14 +416,50 @@ const Meters = () => {
 
             {addStep === "scan" && (
               <div className="space-y-4">
-                <div className="w-full h-52 rounded-2xl bg-muted/20 border-2 border-dashed border-primary/30 flex flex-col items-center justify-center gap-3">
-                  <QrCode className="w-14 h-14 text-primary opacity-60" />
-                  <p className="text-sm text-muted-foreground">Point camera at meter QR code</p>
-                  <p className="text-xs text-muted-foreground/60">(Camera access required)</p>
+                <div className="relative w-full rounded-2xl overflow-hidden bg-black">
+                  {/* QR Scanner container */}
+                  <div id="qr-reader" className="w-full" />
+                  
+                  {!scanning && (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-muted/20 backdrop-blur-sm">
+                      <Camera className="w-14 h-14 text-primary opacity-60 animate-pulse" />
+                      <p className="text-sm text-foreground font-medium">Initializing camera...</p>
+                    </div>
+                  )}
+                  
+                  {/* Scanning overlay */}
+                  {scanning && (
+                    <div className="absolute top-4 left-0 right-0 flex justify-center">
+                      <div className="px-4 py-2 rounded-full bg-primary/90 text-[hsl(var(--navy))] text-xs font-semibold flex items-center gap-2">
+                        <div className="w-2 h-2 rounded-full bg-white animate-pulse" />
+                        Scanning QR code...
+                      </div>
+                    </div>
+                  )}
                 </div>
-                <Button onClick={() => setAddStep("manual")} variant="outline" className="w-full h-11 rounded-xl border-border/40 text-foreground">
-                  Enter code instead
-                </Button>
+                
+                <div className="flex gap-3">
+                  <Button 
+                    onClick={() => {
+                      stopScanning();
+                      setAddStep("method");
+                    }} 
+                    variant="outline" 
+                    className="flex-1 h-11 rounded-xl border-border/40 text-foreground"
+                  >
+                    Cancel
+                  </Button>
+                  <Button 
+                    onClick={() => {
+                      stopScanning();
+                      setAddStep("manual");
+                    }} 
+                    variant="outline" 
+                    className="flex-1 h-11 rounded-xl border-border/40 text-foreground"
+                  >
+                    Enter code instead
+                  </Button>
+                </div>
               </div>
             )}
 
