@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Zap, Fingerprint, Delete } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -21,6 +21,32 @@ const AppLockScreen = ({ pinHash, onUnlock, biometricEnabled, onBiometricAuth }:
   const [pin, setPin] = useState("");
   const [error, setError] = useState("");
   const [shaking, setShaking] = useState(false);
+  const [biometricAttempted, setBiometricAttempted] = useState(false);
+  const [biometricFailed, setBiometricFailed] = useState(false);
+
+  // Auto-trigger biometric on mount if enabled
+  useEffect(() => {
+    if (biometricEnabled && !biometricAttempted) {
+      setBiometricAttempted(true);
+      // Small delay to let UI render first
+      setTimeout(() => {
+        handleBiometricAuth();
+      }, 300);
+    }
+  }, [biometricEnabled, biometricAttempted]);
+
+  const handleBiometricAuth = async () => {
+    try {
+      await onBiometricAuth();
+      // If we get here without error, biometric succeeded
+      // onBiometricAuth should call onUnlock() on success
+    } catch (err) {
+      console.log("Biometric auth failed or cancelled:", err);
+      setBiometricFailed(true);
+      setError("Biometric failed. Please use PIN.");
+      setTimeout(() => setError(""), 3000);
+    }
+  };
 
   const handlePress = async (digit: string) => {
     if (pin.length >= 4) return;
@@ -116,12 +142,14 @@ const AppLockScreen = ({ pinHash, onUnlock, biometricEnabled, onBiometricAuth }:
       {/* Biometric button */}
       {biometricEnabled && (
         <button
-          onClick={onBiometricAuth}
+          onClick={handleBiometricAuth}
           className="mt-8 flex items-center gap-2 text-primary hover:text-primary/80 transition-colors animate-fade-in-up"
           style={{ animationDelay: "0.2s" }}
         >
           <Fingerprint className="w-6 h-6" />
-          <span className="text-sm font-medium">Use Biometric</span>
+          <span className="text-sm font-medium">
+            {biometricFailed ? "Try Biometric Again" : "Use Biometric"}
+          </span>
         </button>
       )}
     </div>

@@ -104,10 +104,11 @@ BEGIN
     processed := processed + 1;
     total_consumed := total_consumed + actual_consumed;
 
-    -- Low balance alert at 5 kWh threshold (max once per day)
+    -- Low balance alerts at multiple thresholds
+    -- 20 kWh threshold (warning)
     IF (current_balance - actual_consumed) > 0
-       AND (current_balance - actual_consumed) <= 5
-       AND current_balance > 5
+       AND (current_balance - actual_consumed) <= 20
+       AND current_balance > 20
     THEN
       IF NOT EXISTS (
         SELECT 1 FROM public.notifications
@@ -118,9 +119,51 @@ BEGIN
         PERFORM public.insert_notification(
           conn.user_id,
           'low_balance',
-          'Low Balance Alert',
-          'Your wallet balance is below 5 kWh (' || ROUND((current_balance - actual_consumed)::numeric, 1) || ' kWh remaining). Recharge soon!',
+          'Balance Running Low',
+          'Your wallet balance is ' || ROUND((current_balance - actual_consumed)::numeric, 1) || ' kWh. Consider recharging soon.',
+          '🟠'
+        );
+      END IF;
+    END IF;
+
+    -- 10 kWh threshold (warning)
+    IF (current_balance - actual_consumed) > 0
+       AND (current_balance - actual_consumed) <= 10
+       AND current_balance > 10
+    THEN
+      IF NOT EXISTS (
+        SELECT 1 FROM public.notifications
+        WHERE user_id = conn.user_id
+          AND type = 'low_balance'
+          AND created_at > now() - INTERVAL '12 hours'
+      ) THEN
+        PERFORM public.insert_notification(
+          conn.user_id,
+          'low_balance',
+          'Low Balance Warning',
+          'Your wallet balance is ' || ROUND((current_balance - actual_consumed)::numeric, 1) || ' kWh. Recharge to avoid disconnection.',
           '🟡'
+        );
+      END IF;
+    END IF;
+
+    -- 5 kWh threshold (urgent)
+    IF (current_balance - actual_consumed) > 0
+       AND (current_balance - actual_consumed) <= 5
+       AND current_balance > 5
+    THEN
+      IF NOT EXISTS (
+        SELECT 1 FROM public.notifications
+        WHERE user_id = conn.user_id
+          AND type = 'low_balance'
+          AND created_at > now() - INTERVAL '6 hours'
+      ) THEN
+        PERFORM public.insert_notification(
+          conn.user_id,
+          'low_balance',
+          'URGENT: Low Balance',
+          'Your wallet balance is critically low (' || ROUND((current_balance - actual_consumed)::numeric, 1) || ' kWh). Recharge immediately!',
+          '🔴'
         );
       END IF;
     END IF;
