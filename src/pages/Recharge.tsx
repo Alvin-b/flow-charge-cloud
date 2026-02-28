@@ -5,20 +5,25 @@ import { Button } from "@/components/ui/button";
 import BottomNav from "@/components/BottomNav";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
+import { mpesaApi, consumptionApi } from "@/lib/api";
+import { useToast } from "@/hooks/use-toast";
 
 const PRESETS = [50, 100, 200, 500, 1000];
-const KES_PER_KWH = 20.45;
+const KES_PER_KWH = 24;
 
 type PayState = "idle" | "pending" | "success" | "failed";
 
 const Recharge = () => {
   const navigate = useNavigate();
   const { profile } = useAuth();
+  const { toast } = useToast();
   const [amount, setAmount] = useState("");
   const [phone, setPhone] = useState("");
   const [payState, setPayState] = useState<PayState>("idle");
   const [walletBalance, setWalletBalance] = useState(0);
-  const [txId] = useState(`PF${Date.now().toString().slice(-8)}`);
+  const [txId, setTxId] = useState("");
+  const [receiptNumber, setReceiptNumber] = useState("");
+  const [dailyAvg, setDailyAvg] = useState(0);
 
   useEffect(() => {
     if (profile?.phone) {
@@ -27,17 +32,73 @@ const Recharge = () => {
     supabase.from("wallets").select("balance_kwh").maybeSingle().then(({ data }) => {
       setWalletBalance(data?.balance_kwh ?? 0);
     });
+    consumptionApi.getSummary().then((s) => setDailyAvg(s?.daily_avg ?? 0)).catch(() => {});
   }, [profile]);
 
   const kwhPreview = amount ? (parseFloat(amount) / KES_PER_KWH).toFixed(2) : "0.00";
-  const dailyAvg = 7.2;
   const daysLeft = dailyAvg > 0 ? Math.round(walletBalance / dailyAvg) : 0;
 
-  const handlePay = () => {
+  const handlePay = async () => {
     if (!amount || parseFloat(amount) < 10) return;
+    
     setPayState("pending");
-    // TODO: Replace with real M-Pesa STK push edge function call
-    setTimeout(() => setPayState("success"), 3500);
+    
+    try {
+      // Initiate M-Pesa STK Push
+      const result = await mpesaApi.initiateSTKPush(phone, parseFloat(amount));
+      setTxId(result.transaction_id);
+      const checkoutId = result.checkout_request_id;
+      
+      // Wait 5 seconds before first query (give user time to see STK prompt)
+      await new Promise(r => setTimeout(r, 5000));
+
+      // Poll using STK Query (direct Safaricom check)
+      let attempts = 0;
+      const maxAttempts = 12; // ~60 seconds total
+      const pollInterval = setInterval(async () => {
+        attempts++;
+        try {
+          const queryResult = await mpesaApi.querySTKStatus(checkoutId);
+          
+          if (queryResult.status === "completed") {
+            clearInterval(pollInterval);
+            setPayState("success");
+            // Refresh wallet balance
+            const { data } = await supabase.from("wallets").select("balance_kwh").maybeSingle();
+            if (data) setWalletBalance(data.balance_kwh);
+          } else if (queryResult.status === "failed" || queryResult.status === "cancelled" || queryResult.status === "timeout") {
+            clearInterval(pollInterval);
+            setPayState("failed");
+            toast({
+              title: "Payment not completed",
+              description: queryResult.result_desc,
+              variant: "destructive",
+            });
+          }
+          // If "pending", keep polling
+        } catch (err) {
+          console.error("STK query error:", err);
+        }
+
+        if (attempts >= maxAttempts) {
+          clearInterval(pollInterval);
+          setPayState("failed");
+          toast({
+            title: "Payment timeout",
+            description: "Please check your transaction status or try again.",
+            variant: "destructive",
+          });
+        }
+      }, 5000);
+    } catch (error: any) {
+      console.error("Payment error:", error);
+      setPayState("failed");
+      toast({
+        title: "Payment failed",
+        description: error.message || "Unable to process payment",
+        variant: "destructive",
+      });
+    }
   };
 
   if (payState === "pending") {

@@ -1,30 +1,82 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Bell, BellOff } from "lucide-react";
+import { ArrowLeft, Bell, BellOff, Loader2 } from "lucide-react";
 import BottomNav from "@/components/BottomNav";
+import { supabase } from "@/integrations/supabase/client";
 
-const allNotifications = [
-  { id: 1, type: "success", icon: "💳", title: "Payment Confirmed", desc: "KES 500 recharge — 24.5 kWh added to wallet", time: "2h ago", read: false },
-  { id: 2, type: "warning", icon: "🟡", title: "Low Balance Alert", desc: "Your balance is below 5 kWh. Recharge now to avoid disconnection.", time: "5h ago", read: false },
-  { id: 3, type: "danger", icon: "🔴", title: "Meter Offline", desc: "Meter KE-01139 has gone offline. SMS fallback activated.", time: "8h ago", read: false },
-  { id: 4, type: "info", icon: "🟠", title: "Abnormal Usage Detected", desc: "Usage spike detected at 6PM — 2.3x above your average.", time: "1d ago", read: true },
-  { id: 5, type: "success", icon: "🟢", title: "Transfer Received", desc: "5 kWh received from John Mwangi (+KES 102)", time: "1d ago", read: true },
-  { id: 6, type: "warning", icon: "⚪", title: "Overconsumption Warning", desc: "You've used 18% more than yesterday. Check your appliances.", time: "2d ago", read: true },
-];
+interface Notification {
+  id: string;
+  type: string;
+  title: string;
+  body: string;
+  read: boolean;
+  created_at: string;
+}
 
 const typeColors: Record<string, string> = {
   success: "border-l-success bg-success/5",
   warning: "border-l-accent bg-accent/5",
   danger: "border-l-destructive bg-destructive/5",
-  info: "border-l-amber bg-amber/5",
+  info: "border-l-primary bg-primary/5",
+  payment: "border-l-success bg-success/5",
+  transfer: "border-l-primary bg-primary/5",
+  meter: "border-l-accent bg-accent/5",
+  alert: "border-l-destructive bg-destructive/5",
+};
+
+const typeIcons: Record<string, string> = {
+  success: "✅", warning: "⚠️", danger: "🔴", info: "ℹ️",
+  payment: "💳", transfer: "🔄", meter: "⚡", alert: "🔔",
+};
+
+const getTimeAgo = (dateStr: string) => {
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  return `${days}d ago`;
 };
 
 const Notifications = () => {
   const navigate = useNavigate();
-  const [notifications, setNotifications] = useState(allNotifications);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [loading, setLoading] = useState(true);
   const unread = notifications.filter((n) => !n.read).length;
 
-  const markAllRead = () => setNotifications((ns) => ns.map((n) => ({ ...n, read: true })));
+  useEffect(() => {
+    const load = async () => {
+      const { data } = await supabase
+        .from("notifications")
+        .select("*")
+        .order("created_at", { ascending: false })
+        .limit(50);
+      setNotifications(data ?? []);
+      setLoading(false);
+    };
+    load();
+  }, []);
+
+  const markAllRead = async () => {
+    const unreadIds = notifications.filter(n => !n.read).map(n => n.id);
+    if (unreadIds.length === 0) return;
+    await supabase.from("notifications").update({ read: true }).in("id", unreadIds);
+    setNotifications((ns) => ns.map((n) => ({ ...n, read: true })));
+  };
+
+  const markOneRead = async (id: string) => {
+    await supabase.from("notifications").update({ read: true }).eq("id", id);
+    setNotifications((ns) => ns.map((n) => n.id === id ? { ...n, read: true } : n));
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen gradient-navy flex items-center justify-center">
+        <Loader2 className="w-8 h-8 text-primary animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen gradient-navy pb-24">
@@ -44,34 +96,43 @@ const Notifications = () => {
       </div>
 
       <div className="px-5 space-y-3">
-        {notifications.map((n, i) => (
-          <div
-            key={n.id}
-            onClick={() => setNotifications((ns) => ns.map((x) => x.id === n.id ? { ...x, read: true } : x))}
-            className={`relative glass-card rounded-2xl p-4 border-l-4 border border-border/20 cursor-pointer transition-all hover:border-primary/20 animate-fade-in-up ${typeColors[n.type]} ${!n.read ? "opacity-100" : "opacity-70"}`}
-            style={{ animationDelay: `${i * 0.05}s` }}
-          >
-            {!n.read && (
-              <div className="absolute top-4 right-4 w-2 h-2 rounded-full bg-primary glow-cyan" />
-            )}
-            <div className="flex items-start gap-3">
-              <span className="text-2xl mt-0.5">{n.icon}</span>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-foreground">{n.title}</p>
-                <p className="text-xs text-muted-foreground mt-1 leading-relaxed">{n.desc}</p>
-                <p className="text-[10px] text-muted-foreground/70 mt-2">{n.time}</p>
-              </div>
-            </div>
-          </div>
-        ))}
-
-        {notifications.every((n) => n.read) && (
+        {notifications.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 gap-3 animate-fade-in">
             <div className="w-16 h-16 rounded-2xl bg-muted/30 flex items-center justify-center">
-              <Bell className="w-8 h-8 text-muted-foreground" />
+              <BellOff className="w-8 h-8 text-muted-foreground" />
             </div>
-            <p className="text-muted-foreground text-sm">All caught up!</p>
+            <p className="text-muted-foreground text-sm">No notifications yet</p>
           </div>
+        ) : (
+          <>
+            {notifications.map((n, i) => (
+              <div
+                key={n.id}
+                onClick={() => markOneRead(n.id)}
+                className={`relative glass-card rounded-2xl p-4 border-l-4 border border-border/20 cursor-pointer transition-all hover:border-primary/20 animate-fade-in-up ${typeColors[n.type] || typeColors.info} ${!n.read ? "opacity-100" : "opacity-70"}`}
+                style={{ animationDelay: `${i * 0.05}s` }}
+              >
+                {!n.read && (
+                  <div className="absolute top-4 right-4 w-2 h-2 rounded-full bg-primary glow-cyan" />
+                )}
+                <div className="flex items-start gap-3">
+                  <span className="text-2xl mt-0.5">{typeIcons[n.type] || "🔔"}</span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-foreground">{n.title}</p>
+                    <p className="text-xs text-muted-foreground mt-1 leading-relaxed">{n.body}</p>
+                    <p className="text-[10px] text-muted-foreground/70 mt-2">{getTimeAgo(n.created_at)}</p>
+                  </div>
+                </div>
+              </div>
+            ))}
+
+            {notifications.length > 0 && notifications.every((n) => n.read) && (
+              <div className="flex flex-col items-center justify-center py-8 gap-3 animate-fade-in">
+                <Bell className="w-6 h-6 text-muted-foreground" />
+                <p className="text-muted-foreground text-sm">All caught up!</p>
+              </div>
+            )}
+          </>
         )}
       </div>
 

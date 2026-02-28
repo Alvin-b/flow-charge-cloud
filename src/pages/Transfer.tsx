@@ -1,32 +1,72 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Search, CheckCircle, XCircle, ChevronRight, ArrowUpRight, ArrowDownLeft } from "lucide-react";
+import { ArrowLeft, Search, CheckCircle, XCircle, ArrowUpRight, ArrowDownLeft, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import BottomNav from "@/components/BottomNav";
+import { transferApi } from "@/lib/api";
+import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 
 const KES_PER_KWH = 20.45;
-const DAILY_LIMIT = 50; // kWh
 
 type Step = "input" | "pin" | "animating" | "success" | "failed";
 type HistoryTab = "send" | "history";
 
-const transferHistory = [
-  { id: 1, type: "out", label: "To Grace Wanjiku", amount: "-10 kWh", time: "Today, 10:23 AM", phone: "0721 *** 456" },
-  { id: 2, type: "in", label: "From John Mwangi", amount: "+5 kWh", time: "Yesterday, 3:12 PM", phone: "0734 *** 123" },
-  { id: 3, type: "out", label: "To Mary Achieng", amount: "-8 kWh", time: "Dec 15, 9:05 AM", phone: "0745 *** 789" },
-];
+interface TransferResult {
+  transaction_id: string;
+  amount_kwh: number;
+  amount_kes: number;
+  recipient_phone: string;
+  recipient_name: string | null;
+  new_balance: number;
+}
+
+interface TransferTx {
+  id: string;
+  type: string;
+  amount_kwh: number;
+  amount_kes: number;
+  recipient_phone: string;
+  created_at: string;
+  metadata: { recipient_name?: string; sender_name?: string };
+  user_id: string;
+}
 
 const Transfer = () => {
   const navigate = useNavigate();
+  const { toast } = useToast();
   const [tab, setTab] = useState<HistoryTab>("send");
   const [step, setStep] = useState<Step>("input");
   const [recipient, setRecipient] = useState("");
   const [amount, setAmount] = useState("");
   const [pin, setPin] = useState("");
-  const used = 18; // kWh transferred today
+  const [sendLoading, setSendLoading] = useState(false);
+  const [transferResult, setTransferResult] = useState<TransferResult | null>(null);
+
+  // Daily usage from backend
+  const [dailyUsage, setDailyUsage] = useState({ used_today: 0, daily_limit: 50, remaining: 50 });
+  const [history, setHistory] = useState<TransferTx[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [currentUserId, setCurrentUserId] = useState<string>("");
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => {
+      if (data.user) setCurrentUserId(data.user.id);
+    });
+    transferApi.getDailyUsage().then(setDailyUsage).catch(console.error);
+  }, []);
+
+  useEffect(() => {
+    if (tab === "history" && history.length === 0) {
+      setHistoryLoading(true);
+      transferApi.getHistory()
+        .then((res) => setHistory(res.transfers || []))
+        .catch(console.error)
+        .finally(() => setHistoryLoading(false));
+    }
+  }, [tab]);
 
   const kesEquiv = amount ? (parseFloat(amount) * KES_PER_KWH).toFixed(0) : "0";
-  const remaining = DAILY_LIMIT - used;
 
   const handleSend = () => {
     if (!recipient || !amount) return;
@@ -38,11 +78,53 @@ const Transfer = () => {
     const next = pin + digit;
     setPin(next);
     if (next.length === 4) {
-      setTimeout(() => {
-        setStep("animating");
-        setTimeout(() => setStep("success"), 2000);
-      }, 300);
+      setTimeout(() => executeTransfer(), 300);
     }
+  };
+
+  const executeTransfer = async () => {
+    setStep("animating");
+    setSendLoading(true);
+    try {
+      const result = await transferApi.send(recipient, parseFloat(amount));
+      setTransferResult(result);
+      // Refresh daily usage
+      transferApi.getDailyUsage().then(setDailyUsage).catch(console.error);
+      setTimeout(() => setStep("success"), 1500);
+    } catch (err: any) {
+      toast({ title: "Transfer failed", description: err.message, variant: "destructive" });
+      setStep("failed");
+    } finally {
+      setSendLoading(false);
+    }
+  };
+
+  const resetForm = () => {
+    setStep("input");
+    setPin("");
+    setAmount("");
+    setRecipient("");
+    setTransferResult(null);
+    // Reload history
+    setHistory([]);
+  };
+
+  const formatTime = (dateStr: string) => {
+    const d = new Date(dateStr);
+    const now = new Date();
+    const isToday = d.toDateString() === now.toDateString();
+    const yesterday = new Date(now);
+    yesterday.setDate(yesterday.getDate() - 1);
+    const isYesterday = d.toDateString() === yesterday.toDateString();
+    const time = d.toLocaleTimeString("en-KE", { hour: "numeric", minute: "2-digit", hour12: true });
+    if (isToday) return `Today, ${time}`;
+    if (isYesterday) return `Yesterday, ${time}`;
+    return d.toLocaleDateString("en-KE", { month: "short", day: "numeric" }) + `, ${time}`;
+  };
+
+  const maskPhone = (phone: string) => {
+    if (!phone || phone.length < 6) return phone;
+    return phone.slice(0, 4) + " *** " + phone.slice(-3);
   };
 
   if (step === "animating") {
@@ -69,7 +151,7 @@ const Transfer = () => {
     );
   }
 
-  if (step === "success") {
+  if (step === "success" && transferResult) {
     return (
       <div className="min-h-screen gradient-navy flex flex-col items-center justify-center px-6 gap-6">
         <div className="w-20 h-20 rounded-full bg-success/20 flex items-center justify-center animate-scale-in">
@@ -81,10 +163,10 @@ const Transfer = () => {
         </div>
         <div className="w-full max-w-sm glass-card rounded-2xl p-5 space-y-3 animate-fade-in-up" style={{ animationDelay: "0.15s" }}>
           {[
-            ["Recipient", recipient],
-            ["Amount Sent", `${amount} kWh`],
-            ["KES Equivalent", `KES ${kesEquiv}`],
-            ["New Balance", "77.4 kWh"],
+            ["Recipient", transferResult.recipient_name || maskPhone(transferResult.recipient_phone)],
+            ["Amount Sent", `${transferResult.amount_kwh} kWh`],
+            ["KES Equivalent", `KES ${transferResult.amount_kes.toLocaleString()}`],
+            ["New Balance", `${transferResult.new_balance.toFixed(1)} kWh`],
             ["Status", "Confirmed"],
           ].map(([label, val]) => (
             <div key={label} className="flex justify-between">
@@ -93,9 +175,27 @@ const Transfer = () => {
             </div>
           ))}
         </div>
-        <Button onClick={() => { setStep("input"); setPin(""); setAmount(""); setRecipient(""); }}
+        <Button onClick={resetForm}
           className="w-full max-w-sm h-12 gradient-cyan text-[hsl(var(--navy))] font-bold rounded-xl">
           Done
+        </Button>
+      </div>
+    );
+  }
+
+  if (step === "failed") {
+    return (
+      <div className="min-h-screen gradient-navy flex flex-col items-center justify-center px-6 gap-6">
+        <div className="w-20 h-20 rounded-full bg-destructive/20 flex items-center justify-center animate-scale-in">
+          <XCircle className="w-12 h-12 text-destructive" />
+        </div>
+        <div className="text-center animate-fade-in-up">
+          <h2 className="text-2xl font-bold text-foreground mb-1">Transfer Failed</h2>
+          <p className="text-muted-foreground text-sm">Something went wrong. Please try again.</p>
+        </div>
+        <Button onClick={resetForm}
+          className="w-full max-w-sm h-12 gradient-cyan text-[hsl(var(--navy))] font-bold rounded-xl">
+          Try Again
         </Button>
       </div>
     );
@@ -160,12 +260,12 @@ const Transfer = () => {
           <div className="glass-card rounded-2xl p-4 border border-border/20 animate-fade-in-up">
             <div className="flex justify-between mb-2">
               <p className="text-xs text-muted-foreground">Daily transfer limit</p>
-              <p className="text-xs font-medium text-foreground">{used} / {DAILY_LIMIT} kWh used</p>
+              <p className="text-xs font-medium text-foreground">{dailyUsage.used_today.toFixed(1)} / {dailyUsage.daily_limit} kWh used</p>
             </div>
             <div className="h-2 bg-muted rounded-full overflow-hidden">
-              <div className="h-full gradient-cyan rounded-full" style={{ width: `${(used/DAILY_LIMIT)*100}%` }} />
+              <div className="h-full gradient-cyan rounded-full" style={{ width: `${(dailyUsage.used_today / dailyUsage.daily_limit) * 100}%` }} />
             </div>
-            <p className="text-xs text-success mt-2 font-medium">{remaining} kWh remaining today</p>
+            <p className="text-xs text-success mt-2 font-medium">{dailyUsage.remaining.toFixed(1)} kWh remaining today</p>
           </div>
 
           {/* Recipient */}
@@ -198,22 +298,42 @@ const Transfer = () => {
         </div>
       ) : (
         <div className="px-5 space-y-3 animate-fade-in-up">
-          <div className="glass-card rounded-2xl overflow-hidden border border-border/20">
-            {transferHistory.map((tx, i) => (
-              <div key={tx.id} className={`flex items-center gap-3 p-4 ${i < transferHistory.length - 1 ? "border-b border-border/30" : ""}`}>
-                <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${tx.type === "out" ? "bg-destructive/15" : "bg-success/15"}`}>
-                  {tx.type === "out" ? <ArrowUpRight className="w-5 h-5 text-destructive" /> : <ArrowDownLeft className="w-5 h-5 text-success" />}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-foreground truncate">{tx.label}</p>
-                  <p className="text-xs text-muted-foreground">{tx.time}</p>
-                </div>
-                <div className="text-right">
-                  <p className={`text-sm font-bold ${tx.type === "out" ? "text-destructive" : "text-success"}`}>{tx.amount}</p>
-                </div>
-              </div>
-            ))}
-          </div>
+          {historyLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="w-6 h-6 text-primary animate-spin" />
+            </div>
+          ) : history.length === 0 ? (
+            <div className="glass-card rounded-2xl p-8 text-center border border-border/20">
+              <ArrowUpRight className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" />
+              <p className="text-foreground font-semibold">No transfers yet</p>
+              <p className="text-xs text-muted-foreground mt-1">Your transfer history will appear here</p>
+            </div>
+          ) : (
+            <div className="glass-card rounded-2xl overflow-hidden border border-border/20">
+              {history.map((tx, i) => {
+                const isOut = tx.type === "transfer_out";
+                const label = isOut
+                  ? `To ${tx.metadata?.recipient_name || maskPhone(tx.recipient_phone)}`
+                  : `From ${tx.metadata?.sender_name || maskPhone(tx.recipient_phone)}`;
+                return (
+                  <div key={tx.id} className={`flex items-center gap-3 p-4 ${i < history.length - 1 ? "border-b border-border/30" : ""}`}>
+                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${isOut ? "bg-destructive/15" : "bg-success/15"}`}>
+                      {isOut ? <ArrowUpRight className="w-5 h-5 text-destructive" /> : <ArrowDownLeft className="w-5 h-5 text-success" />}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-foreground truncate">{label}</p>
+                      <p className="text-xs text-muted-foreground">{formatTime(tx.created_at)}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className={`text-sm font-bold ${isOut ? "text-destructive" : "text-success"}`}>
+                        {isOut ? "-" : "+"}{tx.amount_kwh} kWh
+                      </p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
 

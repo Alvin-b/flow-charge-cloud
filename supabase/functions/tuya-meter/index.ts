@@ -205,6 +205,199 @@ serve(async (req) => {
       });
     }
 
+    // Transfer kWh from wallet to meter
+    if (action === "transfer_to_meter" && req.method === "POST") {
+      const body = await req.json();
+      const { meter_id, kwh_amount } = body;
+
+      if (!meter_id || !kwh_amount || kwh_amount <= 0) {
+        return new Response(
+          JSON.stringify({ error: "meter_id and valid kwh_amount are required" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // Create service role client for transaction
+      const serviceSupabase = createClient(
+        Deno.env.get("SUPABASE_URL")!,
+        Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+      );
+
+      // Verify user owns the meter
+      const { data: meter, error: meterError } = await supabase
+        .from("meters")
+        .select("*")
+        .eq("id", meter_id)
+        .eq("user_id", userId)
+        .single();
+
+      if (meterError || !meter) {
+        return new Response(
+          JSON.stringify({ error: "Meter not found or unauthorized" }),
+          { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // Get user's wallet
+      const { data: wallet, error: walletError } = await supabase
+        .from("wallets")
+        .select("*")
+        .eq("user_id", userId)
+        .single();
+
+      if (walletError || !wallet) {
+        return new Response(
+          JSON.stringify({ error: "Wallet not found" }),
+          { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // Check sufficient balance
+      const walletBalance = parseFloat(wallet.balance_kwh);
+      const transferAmount = parseFloat(kwh_amount);
+      
+      if (walletBalance < transferAmount) {
+        return new Response(
+          JSON.stringify({ 
+            error: "Insufficient wallet balance",
+            wallet_balance: walletBalance,
+            requested: transferAmount
+          }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // Check meter capacity
+      const meterBalance = parseFloat(meter.balance_kwh);
+      const meterMax = parseFloat(meter.max_kwh);
+      const newMeterBalance = meterBalance + transferAmount;
+
+      if (newMeterBalance > meterMax) {
+        return new Response(
+          JSON.stringify({ 
+            error: "Transfer would exceed meter capacity",
+            meter_balance: meterBalance,
+            meter_max: meterMax,
+            available_capacity: meterMax - meterBalance
+          }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      try {
+        // Start transaction: Create transaction record
+        const { data: transaction, error: txError } = await serviceSupabase
+          .from("transactions")
+          .insert({
+            user_id: userId,
+            type: "meter_transfer",
+            amount_kwh: transferAmount,
+            status: "pending",
+            meter_id: meter_id,
+            metadata: {
+              initiated_at: new Date().toISOString(),
+              meter_name: meter.name,
+              tuya_device_id: meter.tuya_device_id,
+            },
+          })
+          .select()
+          .single();
+
+        if (txError) {
+          throw new Error(`Failed to create transaction: ${txError.message}`);
+        }
+
+        // Deduct from wallet
+        const newWalletBalance = walletBalance - transferAmount;
+        const { error: walletUpdateError } = await serviceSupabase
+          .from("wallets")
+          .update({ balance_kwh: newWalletBalance })
+          .eq("id", wallet.id);
+
+        if (walletUpdateError) {
+          // Rollback: mark transaction as failed
+          await serviceSupabase
+            .from("transactions")
+            .update({ status: "failed", error_message: "Wallet update failed" })
+            .eq("id", transaction.id);
+          throw new Error(`Failed to update wallet: ${walletUpdateError.message}`);
+        }
+
+        // Add to meter
+        const { error: meterUpdateError } = await serviceSupabase
+          .from("meters")
+          .update({ balance_kwh: newMeterBalance })
+          .eq("id", meter_id);
+
+        if (meterUpdateError) {
+          // Rollback wallet
+          await serviceSupabase
+            .from("wallets")
+            .update({ balance_kwh: walletBalance })
+            .eq("id", wallet.id);
+          // Mark transaction as failed
+          await serviceSupabase
+            .from("transactions")
+            .update({ status: "failed", error_message: "Meter update failed" })
+            .eq("id", transaction.id);
+          throw new Error(`Failed to update meter: ${meterUpdateError.message}`);
+        }
+
+        // Create meter_transfer record
+        await serviceSupabase.from("meter_transfers").insert({
+          transaction_id: transaction.id,
+          wallet_id: wallet.id,
+          meter_id: meter_id,
+          kwh_amount: transferAmount,
+          wallet_balance_before: walletBalance,
+          wallet_balance_after: newWalletBalance,
+          meter_balance_before: meterBalance,
+          meter_balance_after: newMeterBalance,
+        });
+
+        // Mark transaction as completed
+        await serviceSupabase
+          .from("transactions")
+          .update({ 
+            status: "completed", 
+            completed_at: new Date().toISOString() 
+          })
+          .eq("id", transaction.id);
+
+        // Optional: Send command to Tuya meter (if supported)
+        // Some Tuya meters support balance updates via commands
+        try {
+          // This is device-specific and may not work for all meters
+          // Example: Update a data point for meter balance
+          // await tuyaRequest(`/v1.0/devices/${meter.tuya_device_id}/commands`, "POST", {
+          //   commands: [{ code: "balance", value: newMeterBalance * 100 }] // Value format varies
+          // });
+        } catch (tuyaError) {
+          // Tuya command failed - continue anyway as DB is updated
+          console.warn("Tuya command failed (non-critical):", tuyaError);
+        }
+
+        return new Response(
+          JSON.stringify({
+            success: true,
+            transaction_id: transaction.id,
+            wallet_balance: newWalletBalance,
+            meter_balance: newMeterBalance,
+            transferred: transferAmount,
+            message: `Successfully transferred ${transferAmount} kWh to ${meter.name}`,
+          }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      } catch (err) {
+        console.error("Transfer error:", err);
+        const msg = err instanceof Error ? err.message : "Transfer failed";
+        return new Response(
+          JSON.stringify({ error: msg }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+    }
+
     return new Response(JSON.stringify({ error: "Unknown action" }), {
       status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

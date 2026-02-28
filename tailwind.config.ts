@@ -121,6 +121,11 @@ export default {
           "0%": { backgroundPosition: "-200% 0" },
           "100%": { backgroundPosition: "200% 0" },
         },
+        shake: {
+          "0%, 100%": { transform: "translateX(0)" },
+          "10%, 30%, 50%, 70%, 90%": { transform: "translateX(-4px)" },
+          "20%, 40%, 60%, 80%": { transform: "translateX(4px)" },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
@@ -133,6 +138,7 @@ export default {
         "pulse-ring": "pulse-ring 2s cubic-bezier(0.455, 0.03, 0.515, 0.955) infinite",
         float: "float 3s ease-in-out infinite",
         shimmer: "shimmer 2s linear infinite",
+        shake: "shake 0.5s ease-in-out",
       },
       backgroundImage: {
         "gradient-wallet": "linear-gradient(135deg, hsl(228, 50%, 12%), hsl(210, 60%, 18%), hsl(191, 60%, 16%))",

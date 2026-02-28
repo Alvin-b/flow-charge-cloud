@@ -2,149 +2,126 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   ArrowLeft, Plus, Zap, Wifi, WifiOff, QrCode, X,
-  ChevronRight, Link2, Link2Off, RefreshCw, AlertCircle, CheckCircle2,
-  Home, Building2, Smartphone
+  ChevronRight, Link2Off, AlertCircle, CheckCircle2,
+  Building2, Wrench
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import BottomNav from "@/components/BottomNav";
-import { supabase } from "@/integrations/supabase/client";
+import { meterApi } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
+import { cn } from "@/lib/utils";
 
-interface MeterRow {
-  id: string;
-  tuya_device_id: string;
-  name: string;
+interface ActiveConnection {
+  connection_id: string;
+  meter_id: string;
+  meter_code: string;
+  meter_name: string;
   property_name: string | null;
-  status: string;
-  rate_kwh_hr: number | null;
-  balance_kwh: number;
-  max_kwh: number;
-  last_sync: string | null;
-  sms_fallback: boolean;
+  meter_balance: number;
+  wallet_balance: number;
+  connected_at: string;
 }
 
-type Modal = null | "add" | "detail" | "reconnect" | "unlink_confirm";
-type AddStep = "method" | "scan" | "manual" | "confirm";
+interface ConnectionHistory {
+  id: string;
+  meter_id: string;
+  connected_at: string;
+  disconnected_at: string | null;
+  is_active: boolean;
+  connection_type: string;
+  total_consumed_kwh: number;
+  meters: {
+    name: string;
+    meter_code: string;
+    property_name: string | null;
+  };
+}
 
-const StatusBadge = ({ status }: { status: string }) => (
-  <span className={`flex items-center gap-1 text-[10px] px-2 py-1 rounded-full font-medium ${
-    status === "online" ? "bg-success/15 text-success" : "bg-destructive/15 text-destructive"
-  }`}>
-    {status === "online" ? <Wifi className="w-2.5 h-2.5" /> : <WifiOff className="w-2.5 h-2.5" />}
-    {status === "online" ? "Online" : "Offline"}
-  </span>
-);
+type Modal = null | "add" | "disconnect_confirm";
+type AddStep = "method" | "scan" | "manual" | "connecting";
+
+const StatusBadge = ({ status }: { status: string }) => {
+  const config: Record<string, { icon: typeof Wifi; label: string; cls: string }> = {
+    connected: { icon: Wifi, label: "Connected", cls: "bg-success/15 text-success" },
+    available: { icon: Wifi, label: "Available", cls: "bg-primary/15 text-primary" },
+    offline: { icon: WifiOff, label: "Offline", cls: "bg-destructive/15 text-destructive" },
+    maintenance: { icon: Wrench, label: "Maintenance", cls: "bg-accent/15 text-accent" },
+  };
+  const c = config[status] || config.offline;
+  const Icon = c.icon;
+  return (
+    <span className={cn("flex items-center gap-1 text-[10px] px-2 py-1 rounded-full font-medium", c.cls)}>
+      <Icon className="w-2.5 h-2.5" />
+      {c.label}
+    </span>
+  );
+};
 
 const Meters = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const [meters, setMeters] = useState<MeterRow[]>([]);
+  const [activeConn, setActiveConn] = useState<ActiveConnection | null>(null);
+  const [history, setHistory] = useState<ConnectionHistory[]>([]);
   const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState<Modal>(null);
-  const [selectedMeter, setSelectedMeter] = useState<MeterRow | null>(null);
-  const [manualDeviceId, setManualDeviceId] = useState("");
-  const [meterName, setMeterName] = useState("");
-  const [propertyName, setPropertyName] = useState("");
+  const [meterCode, setMeterCode] = useState("");
   const [addStep, setAddStep] = useState<AddStep>("method");
-  const [syncing, setSyncing] = useState(false);
-  const [linkLoading, setLinkLoading] = useState(false);
+  const [connectLoading, setConnectLoading] = useState(false);
 
-  const fetchMeters = async () => {
-    const { data } = await supabase.from("meters").select("*").order("created_at", { ascending: false });
-    setMeters(data ?? []);
-    setLoading(false);
+  const fetchData = async () => {
+    try {
+      const [activeRes, historyRes] = await Promise.all([
+        meterApi.getActiveConnection(),
+        meterApi.getHistory(),
+      ]);
+      setActiveConn(activeRes.connection ?? null);
+      setHistory(historyRes.connections ?? []);
+    } catch (err) {
+      console.error("Fetch meters error:", err);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  useEffect(() => { fetchMeters(); }, []);
-
-  const openDetail = (meter: MeterRow) => { setSelectedMeter(meter); setModal("detail"); };
-
-  const startReconnect = (meter: MeterRow) => {
-    setSelectedMeter(meter);
-    setManualDeviceId("");
-    setMeterName(meter.name);
-    setPropertyName(meter.property_name || "");
-    setModal("reconnect");
-  };
+  useEffect(() => { fetchData(); }, []);
 
   const closeModal = () => {
     setModal(null);
     setAddStep("method");
-    setManualDeviceId("");
-    setMeterName("");
-    setPropertyName("");
+    setMeterCode("");
   };
 
-  const callTuyaEdge = async (action: string, params?: Record<string, unknown>) => {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) throw new Error("Not authenticated");
-    const url = new URL(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/tuya-meter`);
-    url.searchParams.set("action", action);
-    if (params?.device_id) url.searchParams.set("device_id", params.device_id as string);
-
-    const res = await fetch(url.toString(), {
-      method: params?.body ? "POST" : "GET",
-      headers: {
-        Authorization: `Bearer ${session.access_token}`,
-        "Content-Type": "application/json",
-        apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-      },
-      body: params?.body ? JSON.stringify(params.body) : undefined,
-    });
-    return res.json();
-  };
-
-  const handleAddMeter = async () => {
-    if (addStep !== "confirm") { setAddStep("confirm"); return; }
-    setLinkLoading(true);
+  const handleConnect = async () => {
+    if (!meterCode.trim()) return;
+    setAddStep("connecting");
+    setConnectLoading(true);
     try {
-      const result = await callTuyaEdge("link_meter", {
-        body: {
-          tuya_device_id: manualDeviceId.trim(),
-          name: meterName.trim() || undefined,
-          property_name: propertyName.trim() || undefined,
-        },
-      });
-      if (result.error) throw new Error(result.error);
-      toast({ title: "Meter linked!", description: `${result.meter?.name || "Meter"} added successfully.` });
-      await fetchMeters();
+      await meterApi.connect(meterCode.trim(), "manual_code");
+      toast({ title: "Connected!", description: "Meter connected successfully. Your wallet balance will be used." });
+      await fetchData();
       closeModal();
     } catch (err: any) {
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+      toast({ title: "Connection failed", description: err.message, variant: "destructive" });
+      setAddStep("manual");
     } finally {
-      setLinkLoading(false);
+      setConnectLoading(false);
     }
   };
 
-  const handleUnlink = async (meterId: string) => {
+  const handleDisconnect = async () => {
+    if (!activeConn) return;
     try {
-      const result = await callTuyaEdge("unlink_meter", { body: { meter_id: meterId } });
-      if (result.error) throw new Error(result.error);
-      toast({ title: "Meter unlinked", description: "You can link a new meter anytime." });
-      await fetchMeters();
+      await meterApi.disconnect(activeConn.connection_id);
+      toast({ title: "Disconnected", description: "You can connect to a new meter anytime. Wallet balance is preserved." });
+      await fetchData();
       closeModal();
     } catch (err: any) {
       toast({ title: "Error", description: err.message, variant: "destructive" });
     }
   };
-
-  const handleSyncAll = async () => {
-    setSyncing(true);
-    try {
-      await callTuyaEdge("sync_meters");
-      await fetchMeters();
-      toast({ title: "Sync complete" });
-    } catch {
-      toast({ title: "Sync failed", variant: "destructive" });
-    } finally {
-      setSyncing(false);
-    }
-  };
-
-  const percentFull = (kwh: number, max: number) => max > 0 ? Math.min(100, Math.round((kwh / max) * 100)) : 0;
 
   const timeSince = (dateStr: string | null) => {
-    if (!dateStr) return "Never";
+    if (!dateStr) return "N/A";
     const diff = Date.now() - new Date(dateStr).getTime();
     const mins = Math.floor(diff / 60000);
     if (mins < 1) return "Just now";
@@ -173,111 +150,136 @@ const Meters = () => {
             <ArrowLeft className="w-5 h-5 text-foreground" />
           </button>
           <div>
-            <h1 className="text-xl font-bold text-foreground">My Meters</h1>
-            <p className="text-xs text-muted-foreground">{meters.length} meter{meters.length !== 1 ? "s" : ""} linked</p>
+            <h1 className="text-xl font-bold text-foreground">My Meter</h1>
+            <p className="text-xs text-muted-foreground">
+              {activeConn ? "1 meter connected" : "No meter connected"}
+            </p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <button onClick={handleSyncAll} className="p-2.5 glass-card rounded-xl border border-border/20 hover:border-primary/30 transition-all">
-            <RefreshCw className={`w-4 h-4 text-primary ${syncing ? "animate-spin" : ""}`} />
-          </button>
+        {!activeConn && (
           <button
             onClick={() => { setModal("add"); setAddStep("method"); }}
             className="flex items-center gap-2 px-3 py-2 gradient-cyan rounded-xl text-[hsl(var(--navy))] text-sm font-bold glow-cyan"
           >
-            <Plus className="w-4 h-4" /> Add
+            <Plus className="w-4 h-4" /> Connect
           </button>
-        </div>
+        )}
       </div>
 
-      {/* Meter cards */}
       <div className="px-5 space-y-4">
-        {meters.length === 0 && (
+        {/* Active Connection Card */}
+        {activeConn ? (
+          <div className="glass-card-elevated rounded-2xl p-5 border border-primary/20 animate-fade-in-up">
+            <div className="flex items-start justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-2xl bg-primary/15 flex items-center justify-center border border-primary/10">
+                  <Zap className="w-6 h-6 text-primary" />
+                </div>
+                <div>
+                  <p className="text-base font-bold text-foreground">{activeConn.meter_name}</p>
+                  {activeConn.property_name && (
+                    <p className="text-xs text-muted-foreground flex items-center gap-1">
+                      <Building2 className="w-3 h-3" /> {activeConn.property_name}
+                    </p>
+                  )}
+                  <p className="text-[10px] text-muted-foreground/60 font-mono mt-0.5">{activeConn.meter_code}</p>
+                </div>
+              </div>
+              <StatusBadge status="connected" />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 mb-4">
+              <div className="glass rounded-xl p-3 border border-white/5">
+                <p className="text-[9px] text-muted-foreground uppercase mb-1">Wallet Balance</p>
+                <p className="text-lg font-bold text-primary">{activeConn.wallet_balance.toFixed(1)} kWh</p>
+              </div>
+              <div className="glass rounded-xl p-3 border border-white/5">
+                <p className="text-[9px] text-muted-foreground uppercase mb-1">Connected</p>
+                <p className="text-sm font-bold text-foreground">{timeSince(activeConn.connected_at)}</p>
+              </div>
+            </div>
+
+            <div className="flex gap-3">
+              <Button
+                variant="outline"
+                onClick={() => setModal("disconnect_confirm")}
+                className="flex-1 h-11 rounded-xl border-destructive/40 text-destructive hover:bg-destructive/10"
+              >
+                <Link2Off className="w-4 h-4 mr-1.5" /> Disconnect
+              </Button>
+              <Button
+                className="flex-1 h-11 gradient-cyan text-[hsl(var(--navy))] font-bold rounded-xl"
+                onClick={() => navigate("/recharge")}
+              >
+                <Zap className="w-4 h-4 mr-1.5" /> Top Up
+              </Button>
+            </div>
+          </div>
+        ) : (
           <div className="glass-card rounded-2xl p-8 text-center border-2 border-dashed border-primary/20 animate-fade-in-up">
             <Zap className="w-12 h-12 text-primary/40 mx-auto mb-3" />
-            <p className="text-foreground font-semibold">No meters linked yet</p>
-            <p className="text-xs text-muted-foreground mt-1">Tap "Add" to connect your first Tuya smart meter</p>
+            <p className="text-foreground font-semibold">No meter connected</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              Scan the QR code on your meter or enter the meter code to connect
+            </p>
+            <Button
+              onClick={() => { setModal("add"); setAddStep("method"); }}
+              className="mt-4 gradient-cyan text-[hsl(var(--navy))] font-bold rounded-xl px-6"
+            >
+              <Plus className="w-4 h-4 mr-1.5" /> Connect Meter
+            </Button>
           </div>
         )}
 
-        {meters.map((meter, i) => {
-          const pct = percentFull(meter.balance_kwh, meter.max_kwh);
-          const isLow = pct < 20;
-          return (
-            <div
-              key={meter.id}
-              className="glass-card rounded-2xl p-4 border border-border/20 cursor-pointer hover:border-primary/30 transition-all animate-fade-in-up"
-              style={{ animationDelay: `${i * 0.1}s` }}
-              onClick={() => openDetail(meter)}
-            >
-              <div className="flex items-start justify-between mb-3">
-                <div className="flex items-center gap-3">
-                  <div className={`w-11 h-11 rounded-xl flex items-center justify-center ${meter.status === "online" ? "bg-primary/15" : "bg-muted/30"}`}>
-                    <Zap className={`w-5 h-5 ${meter.status === "online" ? "text-primary" : "text-muted-foreground"}`} />
+        {/* Connection History */}
+        {history.length > 0 && (
+          <div className="animate-fade-in-up" style={{ animationDelay: "0.1s" }}>
+            <h3 className="text-sm font-semibold text-foreground mb-3">Connection History</h3>
+            <div className="glass-card rounded-2xl overflow-hidden border border-border/10">
+              {history.map((conn, i) => (
+                <div
+                  key={conn.id}
+                  className={cn("flex items-center gap-3 px-4 py-3.5", i < history.length - 1 && "border-b border-border/10")}
+                >
+                  <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center",
+                    conn.is_active ? "bg-primary/15" : "bg-muted/20"
+                  )}>
+                    <Zap className={cn("w-5 h-5", conn.is_active ? "text-primary" : "text-muted-foreground")} />
                   </div>
-                  <div>
-                    <p className="text-sm font-semibold text-foreground">{meter.name}</p>
-                    {meter.property_name && <p className="text-xs text-muted-foreground">{meter.property_name}</p>}
-                    <p className="text-[10px] text-muted-foreground/60 font-mono mt-0.5">{meter.tuya_device_id.slice(0, 16)}…</p>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-foreground truncate">{conn.meters?.name || "Unknown"}</p>
+                    <p className="text-[10px] text-muted-foreground">
+                      {conn.meters?.meter_code} · {conn.connection_type === "qr_scan" ? "QR Scan" : "Manual"}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    {conn.is_active ? (
+                      <span className="text-[10px] text-success font-medium">Active</span>
+                    ) : (
+                      <span className="text-[10px] text-muted-foreground">{timeSince(conn.disconnected_at)}</span>
+                    )}
+                    {conn.total_consumed_kwh > 0 && (
+                      <p className="text-[10px] text-muted-foreground">{conn.total_consumed_kwh} kWh used</p>
+                    )}
                   </div>
                 </div>
-                <div className="flex items-center gap-1.5">
-                  <StatusBadge status={meter.status} />
-                  <ChevronRight className="w-4 h-4 text-muted-foreground" />
-                </div>
-              </div>
-
-              <div className="mb-3">
-                <div className="flex justify-between items-center mb-1.5">
-                  <span className="text-[10px] text-muted-foreground uppercase tracking-wide">Energy Balance</span>
-                  <span className={`text-xs font-bold ${isLow ? "text-destructive" : "text-primary"}`}>
-                    {pct}% · {meter.balance_kwh} kWh
-                  </span>
-                </div>
-                <div className="w-full h-2 rounded-full bg-muted/30">
-                  <div className={`h-2 rounded-full transition-all ${isLow ? "bg-destructive" : "gradient-cyan"}`} style={{ width: `${pct}%` }} />
-                </div>
-                {isLow && (
-                  <div className="flex items-center gap-1 mt-1.5">
-                    <AlertCircle className="w-3 h-3 text-destructive" />
-                    <span className="text-[10px] text-destructive">Low balance — recharge soon</span>
-                  </div>
-                )}
-              </div>
-
-              <div className="grid grid-cols-3 gap-2">
-                {[
-                  { label: "Rate", val: `${meter.rate_kwh_hr ?? 0} kWh/hr` },
-                  { label: "Max", val: `${meter.max_kwh} kWh` },
-                  { label: "Last sync", val: timeSince(meter.last_sync) },
-                ].map(({ label, val }) => (
-                  <div key={label} className="glass rounded-lg p-2 border border-white/5">
-                    <p className="text-[9px] text-muted-foreground uppercase mb-1">{label}</p>
-                    <p className="text-xs font-semibold text-foreground">{val}</p>
-                  </div>
-                ))}
-              </div>
-
-              {meter.sms_fallback && (
-                <div className="mt-3 flex items-center gap-2 bg-accent/10 rounded-lg px-3 py-1.5 border border-accent/20">
-                  <Smartphone className="w-3 h-3 text-accent" />
-                  <span className="text-[10px] text-accent font-medium">SMS fallback active</span>
-                </div>
-              )}
+              ))}
             </div>
-          );
-        })}
+          </div>
+        )}
 
-        {/* Move info banner */}
-        <div className="glass-card rounded-2xl p-4 border border-primary/10 animate-fade-in-up" style={{ animationDelay: "0.25s" }}>
+        {/* Info banner */}
+        <div className="glass-card rounded-2xl p-4 border border-primary/10 animate-fade-in-up" style={{ animationDelay: "0.2s" }}>
           <div className="flex items-start gap-3">
             <div className="w-9 h-9 rounded-xl bg-accent/15 flex items-center justify-center shrink-0">
-              <Home className="w-4 h-4 text-accent" />
+              <AlertCircle className="w-4 h-4 text-accent" />
             </div>
             <div>
-              <p className="text-sm font-semibold text-foreground mb-1">Moving to a new property?</p>
+              <p className="text-sm font-semibold text-foreground mb-1">How it works</p>
               <p className="text-xs text-muted-foreground leading-relaxed">
-                Unlink your current meter and reconnect to a new one. Your kWh balance stays in your wallet.
+                Connect to a meter by scanning its QR code or entering the meter code.
+                While connected, the meter uses energy from your wallet balance.
+                You can disconnect anytime — your remaining balance stays in your wallet.
               </p>
             </div>
           </div>
@@ -291,8 +293,8 @@ const Meters = () => {
           <div className="relative w-full glass-card rounded-t-3xl p-6 border-t border-primary/15 animate-slide-up max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-6">
               <div>
-                <h2 className="text-xl font-bold text-foreground">Link Tuya Meter</h2>
-                <p className="text-xs text-muted-foreground mt-0.5">Connect your smart meter to PowerFlow</p>
+                <h2 className="text-xl font-bold text-foreground">Connect Meter</h2>
+                <p className="text-xs text-muted-foreground mt-0.5">Scan QR code or enter meter code</p>
               </div>
               <button onClick={closeModal} className="p-2 rounded-xl hover:bg-muted/30">
                 <X className="w-5 h-5 text-muted-foreground" />
@@ -301,14 +303,13 @@ const Meters = () => {
 
             {addStep === "method" && (
               <div className="space-y-3">
-                <p className="text-xs text-muted-foreground mb-4">How would you like to add your meter?</p>
                 <button onClick={() => setAddStep("scan")} className="w-full flex items-center gap-4 p-4 glass rounded-2xl border border-primary/20 hover:border-primary/40 transition-all text-left">
                   <div className="w-12 h-12 rounded-xl bg-primary/15 flex items-center justify-center shrink-0">
                     <QrCode className="w-6 h-6 text-primary" />
                   </div>
                   <div>
                     <p className="text-sm font-semibold text-foreground">Scan QR Code</p>
-                    <p className="text-xs text-muted-foreground">Point camera at the QR sticker on your meter</p>
+                    <p className="text-xs text-muted-foreground">Point camera at the QR sticker on the meter</p>
                   </div>
                   <ChevronRight className="w-4 h-4 text-muted-foreground ml-auto" />
                 </button>
@@ -317,8 +318,8 @@ const Meters = () => {
                     <Zap className="w-6 h-6 text-muted-foreground" />
                   </div>
                   <div>
-                    <p className="text-sm font-semibold text-foreground">Enter Device ID</p>
-                    <p className="text-xs text-muted-foreground">Type the Tuya Device ID from the meter label</p>
+                    <p className="text-sm font-semibold text-foreground">Enter Meter Code</p>
+                    <p className="text-xs text-muted-foreground">Type the code from the meter label</p>
                   </div>
                   <ChevronRight className="w-4 h-4 text-muted-foreground ml-auto" />
                 </button>
@@ -333,7 +334,7 @@ const Meters = () => {
                   <p className="text-xs text-muted-foreground/60">(Camera access required)</p>
                 </div>
                 <Button onClick={() => setAddStep("manual")} variant="outline" className="w-full h-11 rounded-xl border-border/40 text-foreground">
-                  Enter ID instead
+                  Enter code instead
                 </Button>
               </div>
             )}
@@ -341,62 +342,65 @@ const Meters = () => {
             {addStep === "manual" && (
               <div className="space-y-4">
                 <div>
-                  <p className="text-xs font-medium text-muted-foreground mb-1.5">Tuya Device ID *</p>
-                  <input value={manualDeviceId} onChange={(e) => setManualDeviceId(e.target.value)} placeholder="e.g. eb5f6f5cbf5f7c6f39pjoa" className="w-full px-4 py-3.5 glass-card rounded-xl border border-border/50 bg-transparent text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-primary/50 font-mono text-sm" />
-                  <p className="text-[10px] text-muted-foreground mt-1">Found on the sticker on your Tuya smart meter</p>
+                  <p className="text-xs font-medium text-muted-foreground mb-1.5">Meter Code *</p>
+                  <input
+                    value={meterCode}
+                    onChange={(e) => setMeterCode(e.target.value)}
+                    placeholder="e.g. PF-M001-A3X7"
+                    className="w-full px-4 py-3.5 glass-card rounded-xl border border-border/50 bg-transparent text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-primary/50 font-mono text-sm"
+                  />
+                  <p className="text-[10px] text-muted-foreground mt-1">Found on the sticker on your meter</p>
                 </div>
-                <div>
-                  <p className="text-xs font-medium text-muted-foreground mb-1.5">Meter Label (optional)</p>
-                  <input value={meterName} onChange={(e) => setMeterName(e.target.value)} placeholder="e.g. Main Apartment" className="w-full px-4 py-3.5 glass-card rounded-xl border border-border/50 bg-transparent text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-primary/50 text-sm" />
+                <div className="glass-card rounded-xl p-3 border border-primary/15">
+                  <p className="text-xs text-muted-foreground text-center">
+                    💡 Your <span className="text-primary font-semibold">wallet balance will power this meter</span> once connected.
+                  </p>
                 </div>
-                <div>
-                  <p className="text-xs font-medium text-muted-foreground mb-1.5">Property Name (optional)</p>
-                  <input value={propertyName} onChange={(e) => setPropertyName(e.target.value)} placeholder="e.g. Karen Estate, Block C" className="w-full px-4 py-3.5 glass-card rounded-xl border border-border/50 bg-transparent text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-primary/50 text-sm" />
-                </div>
-                <Button onClick={() => setAddStep("confirm")} disabled={!manualDeviceId.trim()} className="w-full gradient-cyan text-[hsl(var(--navy))] font-bold h-12 rounded-xl disabled:opacity-40">
-                  Look Up Meter
+                <Button
+                  onClick={handleConnect}
+                  disabled={!meterCode.trim() || connectLoading}
+                  className="w-full gradient-cyan text-[hsl(var(--navy))] font-bold h-12 rounded-xl disabled:opacity-40"
+                >
+                  {connectLoading ? (
+                    <span className="flex items-center gap-2">
+                      <div className="w-4 h-4 border-2 border-[hsl(var(--navy))] border-t-transparent rounded-full animate-spin" />
+                      Connecting…
+                    </span>
+                  ) : (
+                    <span className="flex items-center gap-2">
+                      <CheckCircle2 className="w-4 h-4" /> Connect Meter
+                    </span>
+                  )}
                 </Button>
               </div>
             )}
 
-            {addStep === "confirm" && (
-              <div className="space-y-4">
-                <div className="glass-card rounded-2xl p-5 border border-primary/20 text-center">
-                  <div className="w-14 h-14 rounded-2xl bg-primary/15 flex items-center justify-center mx-auto mb-3">
-                    <CheckCircle2 className="w-7 h-7 text-primary" />
-                  </div>
-                  <p className="text-xs text-muted-foreground">Ready to link</p>
-                  <p className="text-lg font-bold text-foreground mt-1">{meterName || "Smart Meter"}</p>
-                  <p className="text-xs text-muted-foreground font-mono mt-1">{manualDeviceId}</p>
-                  {propertyName && <p className="text-xs text-muted-foreground mt-1">{propertyName}</p>}
+            {addStep === "connecting" && (
+              <div className="flex flex-col items-center justify-center py-8 gap-4">
+                <div className="w-16 h-16 rounded-2xl bg-primary/15 flex items-center justify-center animate-pulse">
+                  <Zap className="w-8 h-8 text-primary" />
                 </div>
-                <div className="glass-card rounded-xl p-3 border border-accent/20">
-                  <p className="text-xs text-muted-foreground text-center">
-                    This meter will be linked to your PowerFlow account. Your energy balance is stored in the cloud.
-                  </p>
+                <p className="text-foreground font-semibold">Connecting to meter…</p>
+                <div className="flex gap-1.5">
+                  {[0, 1, 2].map(i => (
+                    <div key={i} className="w-2 h-2 rounded-full bg-primary animate-bounce" style={{ animationDelay: `${i * 0.15}s` }} />
+                  ))}
                 </div>
-                <Button onClick={handleAddMeter} disabled={linkLoading} className="w-full gradient-cyan text-[hsl(var(--navy))] font-bold h-12 rounded-xl">
-                  {linkLoading ? (
-                    <span className="flex items-center gap-2"><RefreshCw className="w-4 h-4 animate-spin" /> Linking…</span>
-                  ) : (
-                    <span className="flex items-center gap-2"><Link2 className="w-4 h-4" /> Link Meter</span>
-                  )}
-                </Button>
               </div>
             )}
           </div>
         </div>
       )}
 
-      {/* ── Reconnect Modal ── */}
-      {modal === "reconnect" && selectedMeter && (
+      {/* ── Disconnect Confirm Modal ── */}
+      {modal === "disconnect_confirm" && activeConn && (
         <div className="fixed inset-0 z-50 flex items-end">
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={closeModal} />
-          <div className="relative w-full glass-card rounded-t-3xl p-6 border-t border-accent/20 animate-slide-up space-y-4">
+          <div className="relative w-full glass-card rounded-t-3xl p-6 border-t border-destructive/20 animate-slide-up space-y-4">
             <div className="flex items-center justify-between">
               <div>
-                <h2 className="text-xl font-bold text-foreground">Move Out</h2>
-                <p className="text-xs text-muted-foreground">Unlink current meter and add a new one</p>
+                <h2 className="text-xl font-bold text-foreground">Disconnect Meter</h2>
+                <p className="text-xs text-muted-foreground">Remove connection to {activeConn.meter_name}</p>
               </div>
               <button onClick={closeModal} className="p-2 rounded-xl hover:bg-muted/30">
                 <X className="w-5 h-5 text-muted-foreground" />
@@ -405,14 +409,16 @@ const Meters = () => {
 
             <div className="glass rounded-xl p-4 border border-destructive/20 space-y-2">
               <p className="text-xs font-semibold text-destructive flex items-center gap-1.5">
-                <Link2Off className="w-3.5 h-3.5" /> Current meter will be unlinked
+                <Link2Off className="w-3.5 h-3.5" /> Meter will be released
               </p>
-              <p className="text-xs text-muted-foreground">{selectedMeter.name} — {selectedMeter.property_name}</p>
+              <p className="text-xs text-muted-foreground">
+                {activeConn.meter_name} — {activeConn.property_name || activeConn.meter_code}
+              </p>
             </div>
 
             <div className="glass-card rounded-xl p-3 border border-primary/15">
               <p className="text-xs text-muted-foreground text-center">
-                💡 Your <span className="text-primary font-semibold">kWh balance stays in your wallet</span> — no energy is lost.
+                💡 Your <span className="text-primary font-semibold">wallet balance stays safe</span> — no energy is lost.
               </p>
             </div>
 
@@ -420,75 +426,9 @@ const Meters = () => {
               <Button variant="outline" onClick={closeModal} className="flex-1 h-11 rounded-xl border-border/40">Cancel</Button>
               <Button
                 className="flex-1 h-11 bg-destructive text-destructive-foreground font-bold rounded-xl"
-                onClick={() => handleUnlink(selectedMeter.id)}
+                onClick={handleDisconnect}
               >
-                <Link2Off className="w-4 h-4 mr-1.5" /> Unlink
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ── Detail Modal ── */}
-      {modal === "detail" && selectedMeter && (
-        <div className="fixed inset-0 z-50 flex items-end">
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={closeModal} />
-          <div className="relative w-full glass-card rounded-t-3xl p-6 border-t border-primary/15 animate-slide-up space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-xl font-bold text-foreground">{selectedMeter.name}</h2>
-                {selectedMeter.property_name && (
-                  <p className="text-xs text-muted-foreground flex items-center gap-1">
-                    <Building2 className="w-3 h-3" /> {selectedMeter.property_name}
-                  </p>
-                )}
-              </div>
-              <button onClick={closeModal} className="p-2 rounded-xl hover:bg-muted/30">
-                <X className="w-5 h-5 text-muted-foreground" />
-              </button>
-            </div>
-
-            {/* Circular balance gauge */}
-            <div className="flex justify-center py-2">
-              {(() => {
-                const pct = percentFull(selectedMeter.balance_kwh, selectedMeter.max_kwh);
-                const r = 44;
-                const circ = 2 * Math.PI * r;
-                const offset = circ - (circ * pct) / 100;
-                const isLow = pct < 20;
-                return (
-                  <svg width="110" height="110" viewBox="0 0 110 110">
-                    <circle cx="55" cy="55" r={r} fill="none" stroke="hsl(var(--border))" strokeWidth="8" />
-                    <circle cx="55" cy="55" r={r} fill="none" stroke={isLow ? "hsl(var(--destructive))" : "hsl(var(--primary))"} strokeWidth="8" strokeLinecap="round" strokeDasharray={circ} strokeDashoffset={offset} transform="rotate(-90 55 55)" style={{ transition: "stroke-dashoffset 1s ease" }} />
-                    <text x="55" y="51" textAnchor="middle" fill="hsl(var(--foreground))" fontSize="16" fontWeight="700">{pct}%</text>
-                    <text x="55" y="65" textAnchor="middle" fill="hsl(var(--muted-foreground))" fontSize="9">{selectedMeter.balance_kwh} kWh</text>
-                  </svg>
-                );
-              })()}
-            </div>
-
-            {[
-              ["Device ID", selectedMeter.tuya_device_id],
-              ["Status", selectedMeter.status === "online" ? "Online" : "Offline"],
-              ["Rate", `${selectedMeter.rate_kwh_hr ?? 0} kWh/hr`],
-              ["Last Synced", timeSince(selectedMeter.last_sync)],
-              ["SMS Fallback", selectedMeter.sms_fallback ? "Active" : "Inactive"],
-            ].map(([label, val]) => (
-              <div key={label} className="flex justify-between py-2 border-b border-border/20">
-                <span className="text-sm text-muted-foreground">{label}</span>
-                <span className={`text-sm font-medium font-mono ${
-                  val === "Online" || val === "Active" ? "text-success" :
-                  val === "Offline" || val === "Inactive" ? "text-destructive" : "text-foreground"
-                }`}>{val}</span>
-              </div>
-            ))}
-
-            <div className="flex gap-3 pt-2">
-              <Button variant="outline" onClick={() => { closeModal(); startReconnect(selectedMeter); }} className="flex-1 h-11 rounded-xl border-accent/40 text-accent hover:bg-accent/10">
-                <RefreshCw className="w-4 h-4 mr-1.5" /> Move Out
-              </Button>
-              <Button className="flex-1 h-11 gradient-cyan text-[hsl(var(--navy))] font-bold rounded-xl" onClick={() => { closeModal(); navigate("/recharge"); }}>
-                <Zap className="w-4 h-4 mr-1.5" /> Recharge
+                <Link2Off className="w-4 h-4 mr-1.5" /> Disconnect
               </Button>
             </div>
           </div>

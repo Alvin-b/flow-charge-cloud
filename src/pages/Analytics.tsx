@@ -1,31 +1,9 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, TrendingUp, TrendingDown, Zap, Clock, Activity, Flame, Sparkles } from "lucide-react";
+import { ArrowLeft, TrendingUp, TrendingDown, Zap, Clock, Activity, Flame, Sparkles, Loader2 } from "lucide-react";
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Area, AreaChart } from "recharts";
 import BottomNav from "@/components/BottomNav";
-
-const dailyData = [
-  { day: "Mon", kwh: 6.2 },
-  { day: "Tue", kwh: 8.1 },
-  { day: "Wed", kwh: 5.5 },
-  { day: "Thu", kwh: 9.3 },
-  { day: "Fri", kwh: 7.8 },
-  { day: "Sat", kwh: 11.2 },
-  { day: "Sun", kwh: 7.4 },
-];
-
-const weeklyData = [
-  { week: "W1", kwh: 45.2 },
-  { week: "W2", kwh: 52.8 },
-  { week: "W3", kwh: 48.1 },
-  { week: "W4", kwh: 55.7 },
-];
-
-const hourlyData = [
-  { hr: "6AM", kw: 0.3 }, { hr: "8AM", kw: 0.8 }, { hr: "10AM", kw: 0.5 },
-  { hr: "12PM", kw: 0.6 }, { hr: "2PM", kw: 0.7 }, { hr: "4PM", kw: 0.9 },
-  { hr: "6PM", kw: 1.8 }, { hr: "8PM", kw: 1.2 }, { hr: "10PM", kw: 0.5 },
-];
+import { consumptionApi } from "@/lib/api";
 
 const CustomTooltip = ({ active, payload, label }: any) => {
   if (active && payload && payload.length) {
@@ -44,6 +22,46 @@ type Tab = "daily" | "weekly" | "monthly";
 const Analytics = () => {
   const navigate = useNavigate();
   const [tab, setTab] = useState<Tab>("daily");
+  const [dailyData, setDailyData] = useState<any[]>([]);
+  const [weeklyData, setWeeklyData] = useState<any[]>([]);
+  const [monthlyData, setMonthlyData] = useState<any[]>([]);
+  const [hourlyData, setHourlyData] = useState<any[]>([]);
+  const [summary, setSummary] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const [daily, weekly, monthly, hourly, sum] = await Promise.all([
+          consumptionApi.getDaily().catch(() => []),
+          consumptionApi.getWeekly().catch(() => []),
+          consumptionApi.getMonthly().catch(() => []),
+          consumptionApi.getHourly().catch(() => []),
+          consumptionApi.getSummary().catch(() => null),
+        ]);
+        setDailyData(daily);
+        setWeeklyData(weekly);
+        setMonthlyData(monthly);
+        setHourlyData(hourly);
+        setSummary(sum);
+      } finally {
+        setLoading(false);
+      }
+    };
+    load();
+  }, []);
+
+  const thisMonth = summary?.this_month ?? 0;
+  const changePct = summary?.change_percent ?? 0;
+  const dailyAvg = summary?.daily_avg ?? 0;
+
+  if (loading) {
+    return (
+      <div className="min-h-screen gradient-navy flex items-center justify-center">
+        <Loader2 className="w-8 h-8 text-primary animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen gradient-navy pb-28 relative overflow-hidden">
@@ -65,9 +83,9 @@ const Analytics = () => {
         {/* Summary cards */}
         <div className="grid grid-cols-3 gap-3 animate-fade-in-up">
           {[
-            { label: "This Month", val: "201.8", unit: "kWh", icon: Zap, color: "text-primary", bg: "bg-primary/10", border: "border-primary/15" },
-            { label: "vs Last Mo.", val: "+12%", unit: "", icon: TrendingUp, color: "text-accent", bg: "bg-accent/10", border: "border-accent/15" },
-            { label: "Avg Daily", val: "7.2", unit: "kWh", icon: TrendingDown, color: "text-success", bg: "bg-success/10", border: "border-success/15" },
+            { label: "This Month", val: thisMonth.toFixed(1), unit: "kWh", icon: Zap, color: "text-primary", bg: "bg-primary/10", border: "border-primary/15" },
+            { label: "vs Last Mo.", val: `${changePct > 0 ? "+" : ""}${changePct}%`, unit: "", icon: TrendingUp, color: "text-accent", bg: "bg-accent/10", border: "border-accent/15" },
+            { label: "Avg Daily", val: dailyAvg.toFixed(1), unit: "kWh", icon: TrendingDown, color: "text-success", bg: "bg-success/10", border: "border-success/15" },
           ].map(({ label, val, unit, icon: Icon, color, bg, border }) => (
             <div key={label} className={`glass-card-elevated rounded-2xl p-3.5 border ${border}`}>
               <div className={`w-9 h-9 ${bg} rounded-xl flex items-center justify-center mb-2.5`}>
@@ -139,21 +157,24 @@ const Analytics = () => {
 
           {tab === "monthly" && (
             <div className="space-y-5 py-2">
-              {[
-                { month: "January", kwh: 185.4, cost: 3791, bar: 72 },
-                { month: "February", kwh: 201.8, cost: 4127, bar: 85 },
-              ].map(({ month, kwh, cost, bar }) => (
-                <div key={month}>
-                  <div className="flex justify-between text-sm mb-2">
-                    <span className="text-foreground font-semibold">{month}</span>
-                    <span className="text-primary font-bold">{kwh} kWh</span>
+              {monthlyData.length > 0 ? monthlyData.map((m: any) => {
+                const maxKwh = Math.max(...monthlyData.map((d: any) => d.kwh || 0), 1);
+                const bar = Math.round(((m.kwh || 0) / maxKwh) * 100);
+                return (
+                  <div key={m.month}>
+                    <div className="flex justify-between text-sm mb-2">
+                      <span className="text-foreground font-semibold">{m.month}</span>
+                      <span className="text-primary font-bold">{(m.kwh || 0).toFixed(1)} kWh</span>
+                    </div>
+                    <div className="h-3 bg-muted/20 rounded-full overflow-hidden">
+                      <div className="h-full gradient-cyan rounded-full transition-all duration-1000" style={{ width: `${bar}%` }} />
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1.5">KES {((m.kwh || 0) * 20.43).toLocaleString(undefined, { maximumFractionDigits: 0 })}</p>
                   </div>
-                  <div className="h-3 bg-muted/20 rounded-full overflow-hidden">
-                    <div className="h-full gradient-cyan rounded-full transition-all duration-1000" style={{ width: `${bar}%` }} />
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-1.5">KES {cost.toLocaleString()}</p>
-                </div>
-              ))}
+                );
+              }) : (
+                <p className="text-center text-sm text-muted-foreground py-6">No monthly data yet</p>
+              )}
             </div>
           )}
         </div>
@@ -190,32 +211,44 @@ const Analytics = () => {
             </AreaChart>
           </ResponsiveContainer>
           <div className="flex justify-between mt-2">
-            <span className="text-[10px] text-muted-foreground">Peak: <span className="text-accent font-bold">1.8 kW at 6 PM</span></span>
-            <span className="text-[10px] text-muted-foreground">Min: <span className="text-success font-bold">0.3 kW at 6 AM</span></span>
+            {hourlyData.length > 0 ? (() => {
+              const peak = hourlyData.reduce((a: any, b: any) => (b.kw || 0) > (a.kw || 0) ? b : a, hourlyData[0]);
+              const min = hourlyData.reduce((a: any, b: any) => (b.kw || 0) < (a.kw || 0) ? b : a, hourlyData[0]);
+              return (
+                <>
+                  <span className="text-[10px] text-muted-foreground">Peak: <span className="text-accent font-bold">{peak.kw} kW at {peak.hr}</span></span>
+                  <span className="text-[10px] text-muted-foreground">Min: <span className="text-success font-bold">{min.kw} kW at {min.hr}</span></span>
+                </>
+              );
+            })() : (
+              <span className="text-[10px] text-muted-foreground">No hourly data yet</span>
+            )}
           </div>
         </div>
 
         {/* Appliance hints */}
-        <div className="glass-card rounded-2xl p-4 border border-primary/10 animate-fade-in-up" style={{ animationDelay: "0.25s" }}>
-          <div className="flex items-center gap-2 mb-3">
-            <Sparkles className="w-4 h-4 text-primary" />
-            <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Monthly equivalent</p>
+        {thisMonth > 0 && (
+          <div className="glass-card rounded-2xl p-4 border border-primary/10 animate-fade-in-up" style={{ animationDelay: "0.25s" }}>
+            <div className="flex items-center gap-2 mb-3">
+              <Sparkles className="w-4 h-4 text-primary" />
+              <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Monthly equivalent</p>
+            </div>
+            <div className="space-y-3">
+              {[
+                { icon: "🧊", label: "Running a fridge", val: `${Math.round(thisMonth / 70)} days` },
+                { icon: "💡", label: "100W bulb on", val: `${Math.round(thisMonth * 10).toLocaleString()} hours` },
+                { icon: "📺", label: "Watching TV", val: `${Math.round(thisMonth * 2).toLocaleString()} hours` },
+                { icon: "🔌", label: "Phone charging", val: `${Math.round(thisMonth * 80).toLocaleString()} charges` },
+              ].map(({ icon, label, val }) => (
+                <div key={label} className="flex items-center gap-3">
+                  <span className="text-xl w-8 text-center">{icon}</span>
+                  <span className="text-sm text-muted-foreground flex-1">{label}</span>
+                  <span className="text-sm font-bold text-foreground">{val}</span>
+                </div>
+              ))}
+            </div>
           </div>
-          <div className="space-y-3">
-            {[
-              { icon: "🧊", label: "Running a fridge", val: "3 days" },
-              { icon: "💡", label: "100W bulb on", val: "2,018 hours" },
-              { icon: "📺", label: "Watching TV", val: "402 hours" },
-              { icon: "🔌", label: "Phone charging", val: "16,144 charges" },
-            ].map(({ icon, label, val }) => (
-              <div key={label} className="flex items-center gap-3">
-                <span className="text-xl w-8 text-center">{icon}</span>
-                <span className="text-sm text-muted-foreground flex-1">{label}</span>
-                <span className="text-sm font-bold text-foreground">{val}</span>
-              </div>
-            ))}
-          </div>
-        </div>
+        )}
       </div>
 
       <BottomNav active="/analytics" />

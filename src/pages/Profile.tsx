@@ -15,20 +15,25 @@ const Profile = () => {
   const navigate = useNavigate();
   const { theme, toggleTheme } = useTheme();
   const { profile, signOut } = useAuth();
-  const [biometric, setBiometric] = useState(false);
+  const [biometric, setBiometric] = useState(() => localStorage.getItem("powerflow-biometric-enabled") === "true");
+  const [biometricSupported, setBiometricSupported] = useState(false);
   const [meterCount, setMeterCount] = useState(0);
   const [walletBalance, setWalletBalance] = useState(0);
 
   useEffect(() => {
     const fetchStats = async () => {
       const [metersRes, walletRes] = await Promise.all([
-        supabase.from("meters").select("id", { count: "exact", head: true }),
+        supabase.from("meter_connections").select("id", { count: "exact", head: true }).eq("status", "active"),
         supabase.from("wallets").select("balance_kwh").maybeSingle(),
       ]);
       setMeterCount(metersRes.count ?? 0);
       setWalletBalance(walletRes.data?.balance_kwh ?? 0);
     };
     fetchStats();
+    // Check WebAuthn platform authenticator support
+    if ("PublicKeyCredential" in window) {
+      PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable?.().then(setBiometricSupported).catch(() => {});
+    }
   }, []);
 
   const initials = (profile?.full_name || "U")
@@ -127,8 +132,51 @@ const Profile = () => {
           <MenuItem
             icon={Fingerprint}
             label="Biometric Auth"
-            subtitle="Use fingerprint or Face ID"
-            right={<Switch checked={biometric} onCheckedChange={setBiometric} className="data-[state=checked]:bg-primary" />}
+            subtitle={biometricSupported ? "Use fingerprint or Face ID" : "Not supported on this device"}
+            right={<Switch
+              checked={biometric}
+              disabled={!biometricSupported}
+              onCheckedChange={async (v) => {
+                if (v) {
+                  try {
+                    const userId = (await supabase.auth.getUser()).data.user?.id;
+                    if (!userId) return;
+                    const challenge = crypto.getRandomValues(new Uint8Array(32));
+                    const credential = await navigator.credentials.create({
+                      publicKey: {
+                        rp: { name: "PowerFlow", id: window.location.hostname },
+                        user: {
+                          id: new TextEncoder().encode(userId),
+                          name: profile?.phone || "user",
+                          displayName: profile?.full_name || "PowerFlow User",
+                        },
+                        challenge,
+                        pubKeyCredParams: [{ alg: -7, type: "public-key" }, { alg: -257, type: "public-key" }],
+                        authenticatorSelection: {
+                          authenticatorAttachment: "platform",
+                          userVerification: "required",
+                          residentKey: "preferred",
+                        },
+                        timeout: 60000,
+                      },
+                    }) as PublicKeyCredential;
+                    if (credential) {
+                      const credId = btoa(String.fromCharCode(...new Uint8Array(credential.rawId)));
+                      localStorage.setItem("powerflow-webauthn-credential", JSON.stringify({ id: credId }));
+                      localStorage.setItem("powerflow-biometric-enabled", "true");
+                      setBiometric(true);
+                    }
+                  } catch {
+                    // User cancelled or not supported
+                  }
+                } else {
+                  localStorage.removeItem("powerflow-webauthn-credential");
+                  localStorage.setItem("powerflow-biometric-enabled", "false");
+                  setBiometric(false);
+                }
+              }}
+              className="data-[state=checked]:bg-primary"
+            />}
           />
         </Section>
 

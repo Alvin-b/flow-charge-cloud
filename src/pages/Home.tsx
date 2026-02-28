@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  Bell, Zap, TrendingUp, TrendingDown, ArrowRight, Battery, Wifi, WifiOff,
+  Bell, Zap, TrendingUp, TrendingDown, ArrowRight, Battery,
   CreditCard, ArrowLeftRight, BarChart3, Activity, ChevronRight, Bolt, 
   Sparkles, Clock, Shield
 } from "lucide-react";
@@ -9,6 +9,7 @@ import BottomNav from "@/components/BottomNav";
 import { useTheme } from "@/components/ThemeProvider";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
+import { meterApi, consumptionApi } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 interface Wallet {
@@ -16,17 +17,32 @@ interface Wallet {
   max_kwh: number;
 }
 
-interface Meter {
-  id: string;
-  name: string;
+interface ActiveConnection {
+  connection_id: string;
+  meter_id: string;
+  meter_code: string;
+  meter_name: string;
   property_name: string | null;
+  meter_balance: number;
+  wallet_balance: number;
+  connected_at: string;
+}
+
+interface Transaction {
+  id: string;
+  type: string;
+  amount_kwh: number;
+  amount_kes: number;
   status: string;
-  tuya_device_id: string;
-  balance_kwh: number;
-  max_kwh: number;
-  rate_kwh_hr: number | null;
-  last_sync: string | null;
-  sms_fallback: boolean;
+  created_at: string;
+  metadata: any;
+}
+
+interface Summary {
+  week_total: number;
+  daily_avg: number;
+  peak_hour: string;
+  change_percent: number;
 }
 
 /* ── Animated Energy Ring ── */
@@ -109,18 +125,27 @@ const Home = () => {
   const { theme } = useTheme();
   const { profile } = useAuth();
   const [wallet, setWallet] = useState<Wallet | null>(null);
-  const [meters, setMeters] = useState<Meter[]>([]);
+  const [activeConn, setActiveConn] = useState<ActiveConnection | null>(null);
+  const [recentTxs, setRecentTxs] = useState<Transaction[]>([]);
+  const [summary, setSummary] = useState<Summary | null>(null);
+  const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [currentTime, setCurrentTime] = useState(new Date());
 
   useEffect(() => {
     const fetchData = async () => {
-      const [walletRes, metersRes] = await Promise.all([
+      const [walletRes, connRes, txRes, notifRes] = await Promise.all([
         supabase.from("wallets").select("*").maybeSingle(),
-        supabase.from("meters").select("*").order("created_at", { ascending: false }),
+        meterApi.getActiveConnection().catch(() => ({ connection: null })),
+        supabase.from("transactions").select("*").order("created_at", { ascending: false }).limit(5),
+        supabase.from("notifications").select("id", { count: "exact", head: true }).eq("read", false),
       ]);
       setWallet(walletRes.data ?? { balance_kwh: 0, max_kwh: 200 });
-      setMeters(metersRes.data ?? []);
+      setActiveConn(connRes.connection ?? null);
+      setRecentTxs(txRes.data ?? []);
+      setUnreadCount(notifRes.count ?? 0);
+      // Fetch summary in background (non-blocking)
+      consumptionApi.getSummary().then(setSummary).catch(() => {});
       setLoading(false);
     };
     fetchData();
@@ -133,16 +158,23 @@ const Home = () => {
   const max = wallet?.max_kwh ?? 200;
   const pct = max > 0 ? Math.min(100, Math.round((balance / max) * 100)) : 0;
   const isLow = pct < 20;
-  const dailyAvg = 7.2;
+  const dailyAvg = summary?.daily_avg ?? 0;
   const daysLeft = dailyAvg > 0 ? Math.round(balance / dailyAvg) : 0;
-  const onlineMeters = meters.filter(m => m.status === "online").length;
 
   const firstName = profile?.full_name?.split(" ")[0] || "User";
   const hour = currentTime.getHours();
   const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
   const greetingEmoji = hour < 12 ? "☀️" : hour < 17 ? "🌤️" : "🌙";
 
-  const activeMeter = meters[0];
+  const getTimeAgo = (dateStr: string) => {
+    const diff = Date.now() - new Date(dateStr).getTime();
+    const mins = Math.floor(diff / 60000);
+    if (mins < 60) return `${mins}m ago`;
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24) return `${hrs}h ago`;
+    const days = Math.floor(hrs / 24);
+    return `${days}d ago`;
+  };
 
   const quickActions = [
     { label: "Recharge", icon: CreditCard, path: "/recharge", gradient: "gradient-cyan", glow: "glow-cyan" },
@@ -193,9 +225,9 @@ const Home = () => {
         </div>
         <div className="flex items-center gap-2">
           <div className="flex items-center gap-1.5 glass-card rounded-full px-3 py-1.5 border border-border/10">
-            <PulseDot color={onlineMeters > 0 ? "bg-success" : "bg-destructive"} />
+            <PulseDot color={activeConn ? "bg-success" : "bg-destructive"} />
             <span className="text-[10px] font-medium text-muted-foreground">
-              {onlineMeters}/{meters.length} online
+              {activeConn ? "Connected" : "No meter"}
             </span>
           </div>
           <button
@@ -203,7 +235,7 @@ const Home = () => {
             className="relative p-2.5 glass-card rounded-xl border border-border/20 card-interactive"
           >
             <Bell className="w-5 h-5 text-foreground" />
-            <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-destructive" />
+            {unreadCount > 0 && <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-destructive" />}
           </button>
         </div>
       </div>
@@ -245,7 +277,7 @@ const Home = () => {
                     </span>
                     <span className="text-primary font-medium text-sm mb-0.5">kWh</span>
                   </div>
-                  <p className="text-xs text-muted-foreground/80">≈ KES {(balance * 20.43).toLocaleString(undefined, { maximumFractionDigits: 0 })}</p>
+<p className="text-xs text-muted-foreground/80">≈ KES {(balance * 24).toLocaleString(undefined, { maximumFractionDigits: 0 })}</p>
                 </div>
 
                 {isLow && (
@@ -272,14 +304,14 @@ const Home = () => {
                     <div className="flex items-center gap-1 mb-0.5">
                       <TrendingDown className="w-3 h-3 text-primary" />
                     </div>
-                    <span className="text-sm font-bold text-foreground block">{dailyAvg}</span>
+                    <span className="text-sm font-bold text-foreground block">{dailyAvg.toFixed(1)}</span>
                     <span className="text-[8px] text-muted-foreground/60 uppercase">kWh/day</span>
                   </div>
                   <div className="bg-white/5 rounded-xl px-2.5 py-2 border border-white/5">
-                    <div className="flex items-center gap-1 mb-0.5">
+                  <div className="flex items-center gap-1 mb-0.5">
                       <Bolt className="w-3 h-3 text-accent" />
                     </div>
-                    <span className="text-sm font-bold text-accent block">{meters.length}</span>
+                    <span className="text-sm font-bold text-accent block">{activeConn ? 1 : 0}</span>
                     <span className="text-[8px] text-muted-foreground/60 uppercase">meters</span>
                   </div>
                 </div>
@@ -311,7 +343,7 @@ const Home = () => {
         </div>
 
         {/* ── Active Meter Card ── */}
-        {activeMeter ? (
+        {activeConn ? (
           <div
             className="glass-card-elevated rounded-2xl p-4 animate-fade-in-up card-interactive"
             style={{ animationDelay: "0.15s" }}
@@ -322,11 +354,9 @@ const Home = () => {
                 <Clock className="w-3.5 h-3.5 text-muted-foreground" />
                 <span className="text-[10px] text-muted-foreground uppercase tracking-wider">Active Meter</span>
               </div>
-              <span className={cn("flex items-center gap-1.5 text-[10px] rounded-full px-2.5 py-1 font-medium",
-                activeMeter.status === "online" ? "bg-success/15 text-success" : "bg-destructive/15 text-destructive"
-              )}>
-                <PulseDot color={activeMeter.status === "online" ? "bg-success" : "bg-destructive"} />
-                {activeMeter.status === "online" ? "Online" : "Offline"}
+              <span className="flex items-center gap-1.5 text-[10px] rounded-full px-2.5 py-1 font-medium bg-success/15 text-success">
+                <PulseDot color="bg-success" />
+                Connected
               </span>
             </div>
             <div className="flex items-center gap-3">
@@ -334,26 +364,26 @@ const Home = () => {
                 <Zap className="w-6 h-6 text-primary" />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-bold text-foreground truncate">{activeMeter.name}</p>
-                {activeMeter.property_name && (
-                  <p className="text-xs text-muted-foreground truncate">{activeMeter.property_name}</p>
+                <p className="text-sm font-bold text-foreground truncate">{activeConn.meter_name}</p>
+                {activeConn.property_name && (
+                  <p className="text-xs text-muted-foreground truncate">{activeConn.property_name}</p>
                 )}
-                <p className="text-[10px] text-muted-foreground/50 font-mono mt-0.5">{activeMeter.tuya_device_id.slice(0, 18)}…</p>
+                <p className="text-[10px] text-muted-foreground/50 font-mono mt-0.5">{activeConn.meter_code}</p>
               </div>
               <ChevronRight className="w-5 h-5 text-muted-foreground" />
             </div>
-            {/* Meter balance bar */}
+            {/* Wallet powering meter indicator */}
             <div className="mt-3 pt-3 border-t border-border/10">
               <div className="flex justify-between items-center mb-1.5">
-                <span className="text-[10px] text-muted-foreground">Meter Balance</span>
-                <span className="text-xs font-bold text-primary">{activeMeter.balance_kwh} / {activeMeter.max_kwh} kWh</span>
+                <span className="text-[10px] text-muted-foreground">Wallet Balance Powering Meter</span>
+                <span className="text-xs font-bold text-primary">{balance.toFixed(1)} kWh</span>
               </div>
               <div className="w-full h-1.5 rounded-full bg-muted/20 overflow-hidden">
                 <div
                   className={cn("h-full rounded-full transition-all duration-1000",
-                    activeMeter.balance_kwh / activeMeter.max_kwh < 0.2 ? "bg-destructive" : "gradient-cyan"
+                    pct < 20 ? "bg-destructive" : "gradient-cyan"
                   )}
-                  style={{ width: `${Math.min(100, (activeMeter.balance_kwh / activeMeter.max_kwh) * 100)}%` }}
+                  style={{ width: `${pct}%` }}
                 />
               </div>
             </div>
@@ -369,7 +399,7 @@ const Home = () => {
             </div>
             <p className="text-sm font-bold text-foreground">Connect Your First Meter</p>
             <p className="text-xs text-muted-foreground mt-1.5 max-w-[220px] mx-auto leading-relaxed">
-              Link your Tuya 4G smart meter to start managing energy remotely
+              Scan the QR code or enter the meter code to start using energy from your wallet
             </p>
             <div className="flex items-center justify-center gap-1.5 mt-3 text-primary">
               <span className="text-xs font-semibold">Get Started</span>
@@ -387,9 +417,9 @@ const Home = () => {
             </button>
           </div>
           <div className="flex gap-3">
-            <StatChip icon={TrendingUp} label="This week" value="50.4 kWh" color="text-primary" />
-            <StatChip icon={Activity} label="Peak" value="6 PM" color="text-accent" />
-            <StatChip icon={TrendingDown} label="Saved" value="12%" color="text-success" />
+            <StatChip icon={TrendingUp} label="This week" value={summary ? `${summary.week_total} kWh` : "--"} color="text-primary" />
+            <StatChip icon={Activity} label="Peak" value={summary?.peak_hour ?? "--"} color="text-accent" />
+            <StatChip icon={TrendingDown} label="vs last mo" value={summary ? `${summary.change_percent > 0 ? "+" : ""}${summary.change_percent}%` : "--"} color="text-success" />
           </div>
         </div>
 
@@ -399,22 +429,34 @@ const Home = () => {
             <h3 className="text-sm font-semibold text-foreground tracking-tight">Recent Activity</h3>
           </div>
           <div className="glass-card rounded-2xl overflow-hidden border border-border/10">
-            {[
-              { icon: "💳", title: "Recharge", desc: "+24.5 kWh via M-Pesa", time: "2h ago", color: "text-success" },
-              { icon: "⚡", title: "Meter Sync", desc: "KE-01139 synced successfully", time: "5h ago", color: "text-primary" },
-              { icon: "🔄", title: "Transfer Out", desc: "-10 kWh to Grace W.", time: "1d ago", color: "text-destructive" },
-            ].map((item, i) => (
-              <div key={i} className={cn("flex items-center gap-3 px-4 py-3.5", i < 2 && "border-b border-border/10")}>
-                <span className="text-lg">{item.icon}</span>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-foreground">{item.title}</p>
-                  <p className="text-[11px] text-muted-foreground">{item.desc}</p>
+            {recentTxs.length > 0 ? recentTxs.slice(0, 3).map((tx, i) => {
+              const icon = tx.type === "recharge" ? "💳" : tx.type === "transfer_out" ? "📤" : tx.type === "transfer_in" ? "🟢" : "⚡";
+              const title = tx.type === "recharge" ? "Recharge" : tx.type === "transfer_out" ? "Transfer Sent" : tx.type === "transfer_in" ? "Transfer Received" : "Meter Transfer";
+              const desc = tx.type === "recharge"
+                ? `+${tx.amount_kwh} kWh via M-Pesa`
+                : tx.type === "transfer_out"
+                ? `-${tx.amount_kwh} kWh to ${tx.metadata?.recipient_name || "user"}`
+                : tx.type === "transfer_in"
+                ? `+${tx.amount_kwh} kWh from ${tx.metadata?.sender_name || "user"}`
+                : `${tx.amount_kwh} kWh to meter`;
+              const timeAgo = getTimeAgo(tx.created_at);
+              return (
+                <div key={tx.id} className={cn("flex items-center gap-3 px-4 py-3.5", i < Math.min(recentTxs.length, 3) - 1 && "border-b border-border/10")}>
+                  <span className="text-lg">{icon}</span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-foreground">{title}</p>
+                    <p className="text-[11px] text-muted-foreground">{desc}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-[10px] text-muted-foreground">{timeAgo}</p>
+                  </div>
                 </div>
-                <div className="text-right">
-                  <p className="text-[10px] text-muted-foreground">{item.time}</p>
-                </div>
+              );
+            }) : (
+              <div className="px-4 py-6 text-center">
+                <p className="text-sm text-muted-foreground">No recent activity</p>
               </div>
-            ))}
+            )}
           </div>
         </div>
 
@@ -430,8 +472,12 @@ const Home = () => {
             <div>
               <p className="text-sm font-bold text-foreground mb-1">Smart Tip 💡</p>
               <p className="text-xs text-muted-foreground leading-relaxed">
-                Your peak usage is at <span className="text-accent font-semibold">6 PM</span>. 
-                Consider shifting heavy appliances to off-peak hours to save up to <span className="text-success font-semibold">15%</span> on energy.
+                {summary?.peak_hour && summary.peak_hour !== "--" ? (
+                  <>Your peak usage is at <span className="text-accent font-semibold">{summary.peak_hour}</span>. </>
+                ) : (
+                  <>Track your usage to discover peak hours. </>
+                )}
+                Consider shifting heavy appliances to off-peak hours to save on energy.
               </p>
             </div>
           </div>
