@@ -136,10 +136,16 @@ serve(async (req) => {
 
       // Find recipient by phone in auth.users (metadata.phone or phone)
       // First look in profiles or auth metadata
+      const phoneVariants = [
+        phone,
+        recipient_phone,
+        `0${phone.substring(3)}`,
+      ];
+
       const { data: recipientProfiles } = await supabase
         .from("profiles")
         .select("id, full_name, phone")
-        .or(`phone.eq.${phone},phone.eq.${recipient_phone},phone.eq.0${phone.substring(3)}`);
+        .in("phone", phoneVariants);
 
       let recipientUserId: string | null = null;
       let recipientName: string | null = null;
