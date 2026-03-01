@@ -7,6 +7,8 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { AuthProvider } from "@/hooks/useAuth";
 import AuthGuard from "@/components/AuthGuard";
+import { OfflineIndicator } from "@/components/OfflineIndicator";
+import { Onboarding } from "@/components/Onboarding";
 import SplashScreen from "./pages/SplashScreen";
 import Register from "./pages/auth/Register";
 import Login from "./pages/auth/Login";
@@ -43,6 +45,8 @@ const App = () => {
           <TooltipProvider>
             <Toaster />
             <Sonner />
+            <OfflineIndicator />
+            <Onboarding />
             <BrowserRouter>
               <Routes>
                 {/* Auth routes — public */}
