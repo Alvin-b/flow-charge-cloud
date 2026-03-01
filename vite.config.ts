@@ -9,6 +9,8 @@ export default defineConfig(({ mode }) => ({
     host: "::",
     port: 8080,
     hmr: { overlay: false },
+    // temporary ngrok hostname for tunneling during development
+    allowedHosts: ["33ad-41-203-215-75.ngrok-free.app"],
   },
   plugins: [
     react(),

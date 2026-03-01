@@ -1,5 +1,4 @@
 import { useState, useEffect } from "react"
-import { useNavigate } from "react-router-dom"
 import { X, ChevronRight, ChevronLeft } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
@@ -40,7 +39,6 @@ interface OnboardingProps {
 }
 
 export function Onboarding({ onComplete }: OnboardingProps) {
-  const navigate = useNavigate()
   const [isOpen, setIsOpen] = useState(false)
   const [currentStep, setCurrentStep] = useState(0)
 
@@ -140,7 +138,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
 
           <Button
             onClick={handleNext}
-            className="flex-1 gradient-cyan text-[hsl(var(--navy)) font-bold rounded-xl h-12"
+            className="flex-1 gradient-cyan text-[hsl(var(--navy))] font-bold rounded-xl h-12"
           >
             {currentStep === STEPS.length - 1 ? "Get Started" : "Next"}
             <ChevronRight className="w-4 h-4 ml-2" />
