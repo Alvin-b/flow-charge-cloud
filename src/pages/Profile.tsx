@@ -2,32 +2,47 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   ChevronRight, Moon, Sun, Fingerprint, Shield, Bell, HelpCircle, LogOut,
-  Zap, User, Mail, Phone, Edit3, Crown, ExternalLink
+  Zap, User, Mail, Phone, Edit3, Crown, ExternalLink, X, Check, Loader2
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
+import { Button } from "@/components/ui/button";
 import BottomNav from "@/components/BottomNav";
 import { useTheme } from "@/components/ThemeProvider";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
+import { useToast } from "@/hooks/use-toast";
+import { Sounds } from "@/lib/sounds";
 
 const Profile = () => {
   const navigate = useNavigate();
   const { theme, toggleTheme } = useTheme();
-  const { profile, signOut } = useAuth();
+  const { profile, signOut, refreshProfile } = useAuth();
+  const { toast } = useToast();
   const [biometric, setBiometric] = useState(() => localStorage.getItem("powerflow-biometric-enabled") === "true");
   const [biometricSupported, setBiometricSupported] = useState(false);
   const [meterCount, setMeterCount] = useState(0);
   const [walletBalance, setWalletBalance] = useState(0);
 
+  // Edit profile state
+  const [editOpen, setEditOpen] = useState(false);
+  const [editName, setEditName] = useState("");
+  const [editPhone, setEditPhone] = useState("");
+  const [editEmail, setEditEmail] = useState("");
+  const [editSaving, setEditSaving] = useState(false);
+
   useEffect(() => {
     const fetchStats = async () => {
-      const [metersRes, walletRes] = await Promise.all([
-        supabase.from("meter_connections").select("id", { count: "exact", head: true }).eq("status", "active"),
-        supabase.from("wallets").select("balance_kwh").maybeSingle(),
-      ]);
-      setMeterCount(metersRes.count ?? 0);
-      setWalletBalance(walletRes.data?.balance_kwh ?? 0);
+      try {
+        const [metersRes, walletRes] = await Promise.all([
+          supabase.from("meter_connections").select("id", { count: "exact", head: true }).eq("status", "active"),
+          supabase.from("wallets").select("balance_kwh").maybeSingle(),
+        ]);
+        setMeterCount(metersRes.count ?? 0);
+        setWalletBalance(walletRes.data?.balance_kwh ?? 0);
+      } catch {
+        // Non-critical — profile page still works
+      }
     };
     fetchStats();
     // Check WebAuthn platform authenticator support
@@ -35,6 +50,41 @@ const Profile = () => {
       PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable?.().then(setBiometricSupported).catch(() => {});
     }
   }, []);
+
+  const openEditProfile = () => {
+    setEditName(profile?.full_name || "");
+    setEditPhone(profile?.phone || "");
+    setEditEmail(profile?.email || "");
+    setEditOpen(true);
+  };
+
+  const saveProfile = async () => {
+    if (!editName.trim()) {
+      toast({ title: "Name required", description: "Please enter your full name", variant: "destructive" });
+      return;
+    }
+    setEditSaving(true);
+    try {
+      const { error } = await supabase
+        .from("profiles")
+        .update({
+          full_name: editName.trim(),
+          phone: editPhone.trim() || null,
+          email: editEmail.trim() || null,
+        })
+        .eq("user_id", profile!.user_id);
+      if (error) throw error;
+      await refreshProfile();
+      Sounds.success();
+      toast({ title: "Profile updated" });
+      setEditOpen(false);
+    } catch (err: any) {
+      Sounds.error();
+      toast({ title: "Update failed", description: err.message, variant: "destructive" });
+    } finally {
+      setEditSaving(false);
+    }
+  };
 
   const initials = (profile?.full_name || "U")
     .split(" ")
@@ -92,20 +142,26 @@ const Profile = () => {
                 <div className="w-20 h-20 rounded-3xl gradient-cyan flex items-center justify-center text-2xl font-bold text-[hsl(var(--navy))] shadow-lg shadow-primary/25">
                   {initials}
                 </div>
-                <button className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full gradient-cyan flex items-center justify-center border-2 border-background shadow-md">
+                <button onClick={openEditProfile} className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full gradient-cyan flex items-center justify-center border-2 border-background shadow-md">
                   <Edit3 className="w-3 h-3 text-[hsl(var(--navy))]" />
                 </button>
                 <div className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-success border-2 border-background" />
               </div>
               <div className="flex-1">
                 <div className="flex items-center gap-2 mb-0.5">
-                  <h2 className="text-lg font-bold text-foreground">{profile?.full_name || "User"}</h2>
+                  <h2 className="text-lg font-bold text-foreground">{profile?.full_name || "Set your name"}</h2>
                   <Crown className="w-4 h-4 text-accent" />
                 </div>
                 {profile?.phone && (
                   <div className="flex items-center gap-1.5 mb-0.5">
-                    <Mail className="w-3 h-3 text-muted-foreground" />
+                    <Phone className="w-3 h-3 text-muted-foreground" />
                     <p className="text-xs text-muted-foreground">{profile.phone}</p>
+                  </div>
+                )}
+                {profile?.email && (
+                  <div className="flex items-center gap-1.5">
+                    <Mail className="w-3 h-3 text-muted-foreground" />
+                    <p className="text-xs text-muted-foreground">{profile.email}</p>
                   </div>
                 )}
               </div>
@@ -126,6 +182,10 @@ const Profile = () => {
             </div>
           </div>
         </div>
+
+        <Section title="Account">
+          <MenuItem icon={User} label="Edit Profile" subtitle="Update name, phone, email" onClick={openEditProfile} />
+        </Section>
 
         <Section title="Security">
           <MenuItem icon={Shield} label="Change PIN" subtitle="Update your transaction PIN" onClick={() => navigate("/auth/pin")} />
@@ -216,6 +276,84 @@ const Profile = () => {
           <p className="text-[10px] text-muted-foreground/30 mt-0.5">Made with ⚡ in Kenya</p>
         </div>
       </div>
+
+      {/* ── Edit Profile Modal ── */}
+      {editOpen && (
+        <div className="fixed inset-0 z-50 flex items-end">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setEditOpen(false)} />
+          <div className="relative w-full glass-card rounded-t-3xl p-6 border-t border-primary/15 animate-slide-up max-h-[85vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h2 className="text-xl font-bold text-foreground">Edit Profile</h2>
+                <p className="text-xs text-muted-foreground mt-0.5">Update your personal information</p>
+              </div>
+              <button onClick={() => setEditOpen(false)} className="p-2 rounded-xl hover:bg-muted/30">
+                <X className="w-5 h-5 text-muted-foreground" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="text-sm font-medium text-muted-foreground mb-1.5 block">Full Name *</label>
+                <div className="relative">
+                  <User className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <input
+                    value={editName}
+                    onChange={(e) => setEditName(e.target.value)}
+                    placeholder="e.g. James Kamau"
+                    className="w-full pl-11 pr-4 py-3.5 glass-card rounded-xl border border-border/50 bg-transparent text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-primary/50 text-base"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-sm font-medium text-muted-foreground mb-1.5 block">Phone Number</label>
+                <div className="relative">
+                  <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <input
+                    value={editPhone}
+                    onChange={(e) => setEditPhone(e.target.value)}
+                    placeholder="e.g. 0712345678"
+                    type="tel"
+                    className="w-full pl-11 pr-4 py-3.5 glass-card rounded-xl border border-border/50 bg-transparent text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-primary/50 text-base"
+                  />
+                </div>
+                <p className="text-[10px] text-muted-foreground mt-1">Used for M-Pesa payments and transfers</p>
+              </div>
+
+              <div>
+                <label className="text-sm font-medium text-muted-foreground mb-1.5 block">Email</label>
+                <div className="relative">
+                  <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <input
+                    value={editEmail}
+                    onChange={(e) => setEditEmail(e.target.value)}
+                    placeholder="you@example.com"
+                    type="email"
+                    className="w-full pl-11 pr-4 py-3.5 glass-card rounded-xl border border-border/50 bg-transparent text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-primary/50 text-base"
+                  />
+                </div>
+              </div>
+
+              <Button
+                onClick={saveProfile}
+                disabled={!editName.trim() || editSaving}
+                className="w-full h-12 gradient-cyan text-[hsl(var(--navy))] font-bold rounded-xl disabled:opacity-40 mt-2"
+              >
+                {editSaving ? (
+                  <span className="flex items-center gap-2">
+                    <Loader2 className="w-4 h-4 animate-spin" /> Saving…
+                  </span>
+                ) : (
+                  <span className="flex items-center gap-2">
+                    <Check className="w-4 h-4" /> Save Changes
+                  </span>
+                )}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <BottomNav active="/profile" />
     </div>

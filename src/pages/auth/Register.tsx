@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowRight, Zap, User, Mail, Lock, Eye, EyeOff } from "lucide-react";
+import { ArrowRight, Zap, User, Mail, Lock, Eye, EyeOff, Phone } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -9,6 +9,7 @@ const Register = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const [fullName, setFullName] = useState("");
+  const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -35,6 +36,7 @@ const Register = () => {
         await supabase.from("profiles").upsert({
           user_id: data.user.id,
           full_name: fullName.trim(),
+          phone: phone.trim() || null,
           email: email.trim(),
         }, { onConflict: "user_id" });
       }
@@ -82,6 +84,21 @@ const Register = () => {
                 placeholder="e.g. James Kamau"
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
+                className="w-full pl-10 pr-4 py-3.5 glass-card rounded-xl border border-border/50 bg-transparent text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/50 transition-colors text-base"
+              />
+            </div>
+          </div>
+
+          {/* Phone */}
+          <div>
+            <label className="text-sm font-medium text-muted-foreground mb-2 block">Phone Number (M-Pesa)</label>
+            <div className="relative">
+              <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <input
+                type="tel"
+                placeholder="e.g. 0712345678"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
                 className="w-full pl-10 pr-4 py-3.5 glass-card rounded-xl border border-border/50 bg-transparent text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/50 transition-colors text-base"
               />
             </div>

@@ -7,6 +7,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { mpesaApi, consumptionApi } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
+import { Sounds } from "@/lib/sounds";
 
 const PRESETS = [50, 100, 200, 500, 1000];
 const KES_PER_KWH = 24;
@@ -38,14 +39,33 @@ const Recharge = () => {
   const kwhPreview = amount ? (parseFloat(amount) / KES_PER_KWH).toFixed(2) : "0.00";
   const daysLeft = dailyAvg > 0 ? Math.round(walletBalance / dailyAvg) : 0;
 
+  // Validate Kenyan phone number format
+  const isValidKenyanPhone = (p: string) => {
+    const cleaned = p.replace(/[\s\-+]/g, "");
+    // Accept 07XXXXXXXX, 01XXXXXXXX, 2547XXXXXXXX, 2541XXXXXXXX
+    return /^(0[17]\d{8}|254[17]\d{8})$/.test(cleaned);
+  };
+
   const handlePay = async () => {
-    if (!amount || parseFloat(amount) < 10) return;
-    
+    if (!amount || parseFloat(amount) < 10) {
+      toast({ title: "Invalid amount", description: "Minimum amount is KES 10", variant: "destructive" });
+      return;
+    }
+    if (!phone.trim()) {
+      toast({ title: "Phone required", description: "Enter your M-Pesa phone number", variant: "destructive" });
+      return;
+    }
+    if (!isValidKenyanPhone(phone)) {
+      toast({ title: "Invalid phone", description: "Enter a valid Safaricom number (e.g. 0712345678)", variant: "destructive" });
+      return;
+    }
+
+    Sounds.charge();
     setPayState("pending");
     
     try {
       // Initiate M-Pesa STK Push
-      const result = await mpesaApi.initiateSTKPush(phone, parseFloat(amount));
+      const result = await mpesaApi.initiateSTKPush(phone.trim(), parseFloat(amount));
       setTxId(result.transaction_id);
       const checkoutId = result.checkout_request_id;
       
@@ -62,12 +82,14 @@ const Recharge = () => {
           
           if (queryResult.status === "completed") {
             clearInterval(pollInterval);
+            Sounds.success();
             setPayState("success");
             // Refresh wallet balance
             const { data } = await supabase.from("wallets").select("balance_kwh").maybeSingle();
             if (data) setWalletBalance(data.balance_kwh);
           } else if (queryResult.status === "failed" || queryResult.status === "cancelled" || queryResult.status === "timeout") {
             clearInterval(pollInterval);
+            Sounds.error();
             setPayState("failed");
             toast({
               title: "Payment not completed",
@@ -202,7 +224,7 @@ const Recharge = () => {
           <p className="text-sm font-medium text-muted-foreground mb-3">Quick amounts (KES)</p>
           <div className="flex flex-wrap gap-2">
             {PRESETS.map((p) => (
-              <button key={p} onClick={() => setAmount(p.toString())} className={`px-4 py-2.5 rounded-xl text-sm font-semibold border transition-all active:scale-95 ${amount === p.toString() ? "bg-primary/20 border-primary text-primary glow-cyan" : "glass-card border-border/30 text-foreground"}`}>
+              <button key={p} onClick={() => { Sounds.tap(); setAmount(p.toString()); }} className={`px-4 py-2.5 rounded-xl text-sm font-semibold border transition-all active:scale-95 ${amount === p.toString() ? "bg-primary/20 border-primary text-primary glow-cyan" : "glass-card border-border/30 text-foreground"}`}>
                 {p.toLocaleString()}
               </button>
             ))}
@@ -235,7 +257,7 @@ const Recharge = () => {
           <p className="text-xs text-muted-foreground text-center">Current rate: <span className="text-foreground font-medium">KES {KES_PER_KWH}/kWh</span> · No transaction fees</p>
         </div>
 
-        <Button onClick={handlePay} disabled={!amount || parseFloat(amount) < 10} className="w-full h-14 gradient-cyan text-[hsl(var(--navy))] font-bold text-base rounded-xl glow-cyan hover:opacity-90 transition-all disabled:opacity-40 animate-fade-in-up" style={{ animationDelay: "0.3s" }}>
+        <Button onClick={handlePay} disabled={!amount || parseFloat(amount) < 10 || !phone.trim()} className="w-full h-14 gradient-cyan text-[hsl(var(--navy))] font-bold text-base rounded-xl glow-cyan hover:opacity-90 transition-all disabled:opacity-40 animate-fade-in-up" style={{ animationDelay: "0.3s" }}>
           Confirm & Pay via M-Pesa
         </Button>
       </div>

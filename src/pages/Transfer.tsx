@@ -6,6 +6,7 @@ import BottomNav from "@/components/BottomNav";
 import { transferApi } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { Sounds } from "@/lib/sounds";
 
 const KES_PER_KWH = 20.45;
 
@@ -75,6 +76,7 @@ const Transfer = () => {
 
   const handlePin = (digit: string) => {
     if (digit === "⌫") { setPin(pin.slice(0, -1)); return; }
+    Sounds.keypress();
     const next = pin + digit;
     setPin(next);
     if (next.length === 4) {
@@ -90,8 +92,9 @@ const Transfer = () => {
       setTransferResult(result);
       // Refresh daily usage
       transferApi.getDailyUsage().then(setDailyUsage).catch(console.error);
-      setTimeout(() => setStep("success"), 1500);
+      setTimeout(() => { Sounds.success(); setStep("success"); }, 1500);
     } catch (err: any) {
+      Sounds.error();
       toast({ title: "Transfer failed", description: err.message, variant: "destructive" });
       setStep("failed");
     } finally {

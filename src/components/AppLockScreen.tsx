@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Zap, Fingerprint, Delete } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Sounds } from "@/lib/sounds";
 
 interface AppLockScreenProps {
   pinHash: string;
@@ -50,14 +51,17 @@ const AppLockScreen = ({ pinHash, onUnlock, biometricEnabled, onBiometricAuth }:
 
   const handlePress = async (digit: string) => {
     if (pin.length >= 4) return;
+    Sounds.keypress();
     const next = pin + digit;
     setPin(next);
 
     if (next.length === 4) {
       const hash = await hashPin(next);
       if (hash === pinHash) {
+        Sounds.success();
         onUnlock();
       } else {
+        Sounds.error();
         setShaking(true);
         setError("Wrong PIN. Try again.");
         setTimeout(() => {

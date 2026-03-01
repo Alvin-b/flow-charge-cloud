@@ -6,6 +6,7 @@ interface Profile {
   user_id: string;
   full_name: string;
   phone: string;
+  email: string | null;
   pin_hash: string | null;
   avatar_url: string | null;
 }
@@ -40,7 +41,22 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       .select("*")
       .eq("user_id", userId)
       .maybeSingle();
-    setProfile(data ?? null);
+
+    if (data) {
+      // If profile exists but full_name is missing, try to fill it from Supabase Auth user_metadata
+      if (!data.full_name) {
+        const { data: { user: authUser } } = await supabase.auth.getUser();
+        const metaName = authUser?.user_metadata?.full_name;
+        if (metaName) {
+          data.full_name = metaName;
+          // Persist it back so next load is faster
+          supabase.from("profiles").update({ full_name: metaName }).eq("user_id", userId).then(() => {});
+        }
+      }
+      setProfile(data);
+    } else {
+      setProfile(null);
+    }
   };
 
   const refreshProfile = async () => {

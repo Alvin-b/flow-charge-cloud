@@ -11,6 +11,7 @@ import { meterApi } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { Html5Qrcode } from "html5-qrcode";
+import { Sounds } from "@/lib/sounds";
 
 interface ActiveConnection {
   connection_id: string;
@@ -114,17 +115,33 @@ const Meters = () => {
     setScanning(true);
     
     try {
+      // Request camera permission explicitly before anything else.
+      // This triggers the browser/OS permission dialog on first use.
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+        // Stop the temporary stream — html5-qrcode will open its own
+        stream.getTracks().forEach(t => t.stop());
+      } catch (permErr: any) {
+        if (permErr.name === "NotAllowedError" || permErr.name === "PermissionDeniedError") {
+          throw new Error("Camera permission denied. Please allow camera access in your browser or device settings and try again.");
+        }
+        if (permErr.name === "NotFoundError" || permErr.name === "DevicesNotFoundError") {
+          throw new Error("No camera found on this device.");
+        }
+        throw new Error("Unable to access camera: " + (permErr.message || "Unknown error"));
+      }
+
       // Initialize scanner
       if (!qrScannerRef.current) {
         qrScannerRef.current = new Html5Qrcode("qr-reader");
       }
 
       if (!scannerInitialized.current) {
-        // Get camera list first
+        // Get camera list (permission already granted above)
         const cameras = await Html5Qrcode.getCameras();
         
         if (!cameras || cameras.length === 0) {
-          throw new Error("No cameras found. Please check camera permissions.");
+          throw new Error("No cameras found after granting permission.");
         }
 
         // Use back camera if available (for mobile), otherwise use first camera
@@ -185,10 +202,12 @@ const Meters = () => {
     setConnectLoading(true);
     try {
       await meterApi.connect(meterCode.trim(), "manual_code");
+      Sounds.success();
       toast({ title: "Connected!", description: "Meter connected successfully. Your wallet balance will be used." });
       await fetchData();
       closeModal();
     } catch (err: any) {
+      Sounds.error();
       toast({ title: "Connection failed", description: err.message, variant: "destructive" });
       setAddStep("manual");
     } finally {
@@ -391,7 +410,7 @@ const Meters = () => {
 
             {addStep === "method" && (
               <div className="space-y-3">
-                <button onClick={startQRScanner} className="w-full flex items-center gap-4 p-4 glass rounded-2xl border border-primary/20 hover:border-primary/40 transition-all text-left">
+                <button onClick={() => { Sounds.tap(); startQRScanner(); }} className="w-full flex items-center gap-4 p-4 glass rounded-2xl border border-primary/20 hover:border-primary/40 transition-all text-left">
                   <div className="w-12 h-12 rounded-xl bg-primary/15 flex items-center justify-center shrink-0">
                     <QrCode className="w-6 h-6 text-primary" />
                   </div>
@@ -401,7 +420,7 @@ const Meters = () => {
                   </div>
                   <ChevronRight className="w-4 h-4 text-muted-foreground ml-auto" />
                 </button>
-                <button onClick={() => setAddStep("manual")} className="w-full flex items-center gap-4 p-4 glass rounded-2xl border border-border/20 hover:border-primary/20 transition-all text-left">
+                <button onClick={() => { Sounds.tap(); setAddStep("manual"); }} className="w-full flex items-center gap-4 p-4 glass rounded-2xl border border-border/20 hover:border-primary/20 transition-all text-left">
                   <div className="w-12 h-12 rounded-xl bg-muted/20 flex items-center justify-center shrink-0">
                     <Zap className="w-6 h-6 text-muted-foreground" />
                   </div>

@@ -11,6 +11,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { meterApi, consumptionApi } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { Sounds } from "@/lib/sounds";
 
 interface Wallet {
   balance_kwh: number;
@@ -134,24 +135,33 @@ const Home = () => {
 
   useEffect(() => {
     const fetchData = async () => {
-      const [walletRes, connRes, txRes, notifRes] = await Promise.all([
-        supabase.from("wallets").select("*").maybeSingle(),
-        meterApi.getActiveConnection().catch(() => ({ connection: null })),
-        supabase.from("transactions").select("*").order("created_at", { ascending: false }).limit(5),
-        supabase.from("notifications").select("id", { count: "exact", head: true }).eq("read", false),
-      ]);
-      setWallet(walletRes.data ?? { balance_kwh: 0, max_kwh: 200 });
-      setActiveConn(connRes.connection ?? null);
-      setRecentTxs(txRes.data ?? []);
-      setUnreadCount(notifRes.count ?? 0);
-      // Fetch summary in background (non-blocking)
-      consumptionApi.getSummary().then(setSummary).catch(() => {});
-      setLoading(false);
+      try {
+        const [walletRes, connRes, txRes, notifRes] = await Promise.all([
+          supabase.from("wallets").select("*").maybeSingle().then(r => r.data),
+          meterApi.getActiveConnection().catch(() => ({ connection: null })),
+          supabase.from("transactions").select("*").order("created_at", { ascending: false }).limit(5).then(r => r.data),
+          supabase.from("notifications").select("id", { count: "exact", head: true }).eq("read", false).then(r => r.count),
+        ]);
+        setWallet(walletRes ?? { balance_kwh: 0, max_kwh: 200 });
+        setActiveConn(connRes.connection ?? null);
+        setRecentTxs(txRes ?? []);
+        setUnreadCount(notifRes ?? 0);
+        // Fetch summary in background (non-blocking)
+        consumptionApi.getSummary().then(setSummary).catch(() => {});
+      } catch (err) {
+        console.error("Home fetchData error:", err);
+        // Show whatever we already have rather than spinning forever
+        setWallet(prev => prev ?? { balance_kwh: 0, max_kwh: 200 });
+      } finally {
+        setLoading(false);
+      }
     };
     fetchData();
 
+    // Safety net: force loading off after 8 seconds no matter what
+    const timeout = setTimeout(() => setLoading(false), 8000);
     const timer = setInterval(() => setCurrentTime(new Date()), 60000);
-    return () => clearInterval(timer);
+    return () => { clearTimeout(timeout); clearInterval(timer); };
   }, []);
 
   const balance = wallet?.balance_kwh ?? 0;
@@ -231,7 +241,7 @@ const Home = () => {
             </span>
           </div>
           <button
-            onClick={() => navigate("/notifications")}
+            onClick={() => { Sounds.tap(); navigate("/notifications"); }}
             className="relative p-2.5 glass-card rounded-xl border border-border/20 card-interactive"
           >
             <Bell className="w-5 h-5 text-foreground" />
@@ -330,7 +340,7 @@ const Home = () => {
             {quickActions.map(({ label, icon: Icon, path, gradient, glow }) => (
               <button
                 key={label}
-                onClick={() => navigate(path)}
+                onClick={() => { Sounds.tap(); navigate(path); }}
                 className="flex flex-col items-center gap-2.5 card-interactive"
               >
                 <div className={cn("w-14 h-14 rounded-2xl flex items-center justify-center shadow-lg", gradient, glow)}>

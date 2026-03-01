@@ -432,6 +432,12 @@ serve(async (req) => {
       { global: { headers: { Authorization: authHeader } } }
     );
 
+    // Service role client for DB writes (bypasses RLS)
+    const serviceSupabase = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+    );
+
     const token = authHeader.replace("Bearer ", "");
     const { data: { user }, error: userError } = await supabase.auth.getUser(token);
     
@@ -459,7 +465,8 @@ serve(async (req) => {
         );
       }
 
-      const result = await initiateSTKPush(supabase, userId, phone, amount_kes);
+      // Use service role client so transaction writes aren't blocked by RLS
+      const result = await initiateSTKPush(serviceSupabase, userId, phone, amount_kes);
       
       return new Response(JSON.stringify(result), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -478,7 +485,7 @@ serve(async (req) => {
         );
       }
 
-      const result = await checkStatus(supabase, transactionId, userId);
+      const result = await checkStatus(serviceSupabase, transactionId, userId);
       
       return new Response(JSON.stringify(result), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },

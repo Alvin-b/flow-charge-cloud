@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import { Home, Zap, BarChart3, ArrowLeftRight, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTheme } from "./ThemeProvider";
+import { Sounds } from "@/lib/sounds";
 
 const tabs = [
   { path: "/", icon: Home, label: "Home" },
@@ -34,6 +35,7 @@ const BottomNav = ({ active }: BottomNavProps) => {
                 key={path}
                 to={path}
                 className="relative -mt-7 flex flex-col items-center gap-1"
+                onClick={() => Sounds.navigate()}
               >
                 <div className={cn(
                   "w-14 h-14 rounded-2xl gradient-cyan flex items-center justify-center shadow-lg transition-all duration-300",
@@ -56,6 +58,7 @@ const BottomNav = ({ active }: BottomNavProps) => {
               key={path}
               to={path}
               className="flex flex-col items-center gap-0.5 py-1 px-3 rounded-xl transition-all duration-200 relative"
+              onClick={() => Sounds.navigate()}
             >
               {/* Active indicator bar */}
               {isActive && (
