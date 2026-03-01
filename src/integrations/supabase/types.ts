@@ -92,6 +92,39 @@ export type Database = {
         }
         Relationships: []
       }
+      notifications: {
+        Row: {
+          body: string
+          created_at: string
+          icon: string | null
+          id: string
+          read: boolean
+          title: string
+          type: string
+          user_id: string
+        }
+        Insert: {
+          body?: string
+          created_at?: string
+          icon?: string | null
+          id?: string
+          read?: boolean
+          title: string
+          type?: string
+          user_id: string
+        }
+        Update: {
+          body?: string
+          created_at?: string
+          icon?: string | null
+          id?: string
+          read?: boolean
+          title?: string
+          type?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -123,6 +156,60 @@ export type Database = {
           id?: string
           phone?: string
           pin_hash?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      transactions: {
+        Row: {
+          amount_kes: number
+          amount_kwh: number
+          completed_at: string | null
+          created_at: string
+          error_message: string | null
+          id: string
+          metadata: Json | null
+          mpesa_checkout_request_id: string | null
+          mpesa_receipt_number: string | null
+          mpesa_transaction_id: string | null
+          phone_number: string | null
+          status: string
+          type: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          amount_kes?: number
+          amount_kwh?: number
+          completed_at?: string | null
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          metadata?: Json | null
+          mpesa_checkout_request_id?: string | null
+          mpesa_receipt_number?: string | null
+          mpesa_transaction_id?: string | null
+          phone_number?: string | null
+          status?: string
+          type?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          amount_kes?: number
+          amount_kwh?: number
+          completed_at?: string | null
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          metadata?: Json | null
+          mpesa_checkout_request_id?: string | null
+          mpesa_receipt_number?: string | null
+          mpesa_transaction_id?: string | null
+          phone_number?: string | null
+          status?: string
+          type?: string
           updated_at?: string
           user_id?: string
         }
@@ -160,7 +247,16 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      insert_notification: {
+        Args: {
+          p_body: string
+          p_icon?: string
+          p_title: string
+          p_type: string
+          p_user_id: string
+        }
+        Returns: undefined
+      }
     }
     Enums: {
       [_ in never]: never
