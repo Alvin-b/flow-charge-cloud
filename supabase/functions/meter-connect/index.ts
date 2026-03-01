@@ -54,13 +54,29 @@ serve(async (req) => {
       const body = await req.json();
       const { meter_code, connection_type } = body;
 
-      if (!meter_code) {
+      if (!meter_code || typeof meter_code !== "string" || meter_code.trim().length === 0 || meter_code.trim().length > 50) {
         return new Response(
-          JSON.stringify({ error: "meter_code is required" }),
-          {
-            status: 400,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          }
+          JSON.stringify({ error: "Valid meter_code is required (max 50 chars)" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // Validate connection_type if provided
+      const validTypes = ["manual_code", "qr_scan", "nfc"];
+      const connType = connection_type && validTypes.includes(connection_type) ? connection_type : "manual_code";
+
+      // Rate limit: 3 connect attempts per minute
+      const { data: canProceed } = await serviceSupabase.rpc('check_rate_limit', {
+        p_user_id: userId,
+        p_action: 'meter_connect',
+        p_limit: 3,
+        p_window_seconds: 60
+      });
+
+      if (!canProceed) {
+        return new Response(
+          JSON.stringify({ error: "Rate limit exceeded. Please wait before retrying." }),
+          { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
 
@@ -134,7 +150,7 @@ serve(async (req) => {
         .insert({
           user_id: userId,
           meter_id: meter.id,
-          connection_type: connection_type || "manual_code",
+          connection_type: connType,
           is_active: true,
           initial_wallet_balance: wallet?.balance_kwh ?? 0,
           initial_meter_balance: meter.balance_kwh,

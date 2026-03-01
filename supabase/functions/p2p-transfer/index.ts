@@ -51,15 +51,39 @@ serve(async (req) => {
       }
 
       const kwh = parseFloat(amount_kwh);
-      if (isNaN(kwh) || kwh < MIN_TRANSFER_KWH) {
+      if (isNaN(kwh) || kwh < MIN_TRANSFER_KWH || kwh > DAILY_TRANSFER_LIMIT_KWH) {
         return new Response(
-          JSON.stringify({ error: `Minimum transfer is ${MIN_TRANSFER_KWH} kWh` }),
+          JSON.stringify({ error: `Transfer must be between ${MIN_TRANSFER_KWH} and ${DAILY_TRANSFER_LIMIT_KWH} kWh` }),
           { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
 
+      // Validate phone format
+      const phoneStr = String(recipient_phone).replace(/[^0-9+]/g, "");
+      if (phoneStr.length < 9 || phoneStr.length > 15) {
+        return new Response(
+          JSON.stringify({ error: "Invalid phone number" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // Rate limit: 5 transfers per minute
+      const { data: canProceed } = await supabase.rpc('check_rate_limit', {
+        p_user_id: user.id,
+        p_action: 'p2p_transfer',
+        p_limit: 5,
+        p_window_seconds: 60
+      });
+
+      if (!canProceed) {
+        return new Response(
+          JSON.stringify({ error: "Rate limit exceeded. Please wait before retrying." }),
+          { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
       // Format phone for lookup
-      let phone = recipient_phone.replace(/[\s\-+]/g, "");
+      let phone = phoneStr.replace(/[+]/g, "");
       if (phone.startsWith("0")) phone = "254" + phone.substring(1);
       if (!phone.startsWith("254")) phone = "254" + phone;
 
