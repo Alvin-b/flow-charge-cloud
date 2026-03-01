@@ -46,6 +46,14 @@ serve(async (req) => {
       );
     }
 
+    // Validate topic format and length
+    if (typeof topic !== "string" || topic.length > 200 || !/^[a-zA-Z0-9/_-]+$/.test(topic)) {
+      return new Response(
+        JSON.stringify({ error: "Invalid topic format" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     // Parse payload
     let payload;
     try {
@@ -70,6 +78,24 @@ serve(async (req) => {
 
     const meterId = topicParts[1];
     const messageType = topicParts[2];
+
+    // Validate meterId is UUID format
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(meterId)) {
+      return new Response(
+        JSON.stringify({ error: "Invalid meter ID format" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Validate message type
+    const validTypes = ["status", "consumption", "response", "alert"];
+    if (!validTypes.includes(messageType)) {
+      return new Response(
+        JSON.stringify({ error: "Invalid message type" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
 
     // Get meter from database
     const { data: meter } = await supabase

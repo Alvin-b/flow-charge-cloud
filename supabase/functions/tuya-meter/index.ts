@@ -118,6 +118,34 @@ serve(async (req) => {
       const body = await req.json();
       const { tuya_device_id, name, property_name } = body;
 
+      // Input validation
+      if (!tuya_device_id || typeof tuya_device_id !== "string" || tuya_device_id.length > 100 || !/^[a-zA-Z0-9_-]+$/.test(tuya_device_id)) {
+        return new Response(JSON.stringify({ error: "Invalid device ID format" }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      if (name && (typeof name !== "string" || name.length > 200)) {
+        return new Response(JSON.stringify({ error: "Name must be under 200 characters" }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      if (property_name && (typeof property_name !== "string" || property_name.length > 500)) {
+        return new Response(JSON.stringify({ error: "Property name must be under 500 characters" }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      // Rate limit: 5 Tuya operations per minute
+      const serviceClient = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+      const { data: canProceed } = await serviceClient.rpc('check_rate_limit', {
+        p_user_id: userId, p_action: 'tuya_operation', p_limit: 5, p_window_seconds: 60
+      });
+      if (!canProceed) {
+        return new Response(JSON.stringify({ error: "Rate limit exceeded. Please wait before retrying." }), {
+          status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
       // Verify device exists in Tuya
       const deviceData = await tuyaRequest(`/v1.0/devices/${tuya_device_id}`);
       if (!deviceData.success) {
@@ -210,9 +238,18 @@ serve(async (req) => {
       const body = await req.json();
       const { meter_id, kwh_amount } = body;
 
-      if (!meter_id || !kwh_amount || kwh_amount <= 0) {
+      // Validate meter_id is UUID format and kwh_amount is reasonable
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!meter_id || typeof meter_id !== "string" || !uuidRegex.test(meter_id)) {
         return new Response(
-          JSON.stringify({ error: "meter_id and valid kwh_amount are required" }),
+          JSON.stringify({ error: "Valid meter_id is required" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      const parsedKwh = parseFloat(kwh_amount);
+      if (!kwh_amount || isNaN(parsedKwh) || parsedKwh <= 0 || parsedKwh > 10000) {
+        return new Response(
+          JSON.stringify({ error: "kwh_amount must be between 0 and 10,000" }),
           { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }

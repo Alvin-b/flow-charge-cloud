@@ -451,8 +451,40 @@ serve(async (req) => {
         );
       }
 
+      // Validate inputs
+      const parsedAmount = parseFloat(amount_kes);
+      if (isNaN(parsedAmount) || parsedAmount < 10 || parsedAmount > 150000) {
+        return new Response(
+          JSON.stringify({ error: "Amount must be between KES 10 and 150,000" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      const phoneStr = String(phone).replace(/[^0-9+]/g, "");
+      if (phoneStr.length < 9 || phoneStr.length > 15) {
+        return new Response(
+          JSON.stringify({ error: "Invalid phone number" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // Rate limit: 2 STK pushes per minute
+      const { data: canProceed } = await serviceSupabase.rpc('check_rate_limit', {
+        p_user_id: userId,
+        p_action: 'stk_push_initiate',
+        p_limit: 2,
+        p_window_seconds: 60
+      });
+
+      if (!canProceed) {
+        return new Response(
+          JSON.stringify({ error: "Rate limit exceeded. Please wait before retrying." }),
+          { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
       // Use service role client so transaction writes aren't blocked by RLS
-      const result = await initiateSTKPush(serviceSupabase, userId, phone, amount_kes);
+      const result = await initiateSTKPush(serviceSupabase, userId, phoneStr, parsedAmount);
       
       return new Response(JSON.stringify(result), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
