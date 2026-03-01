@@ -300,7 +300,11 @@ serve(async (req) => {
     // Called by Safaricom after B2B payment completes
     if (action === "b2b_callback" && req.method === "POST") {
       const body = await req.json();
-      console.log("B2B Callback received:", JSON.stringify(body, null, 2));
+      console.log("B2B Callback received:", {
+        conversationId: body.Result?.ConversationID?.substring(0, 8) + "...",
+        resultCode: body.Result?.ResultCode,
+        timestamp: new Date().toISOString(),
+      });
 
       const result = body.Result;
       if (!result) {
@@ -389,7 +393,10 @@ serve(async (req) => {
     // ─── B2B TIMEOUT ────────────────────────────────────────
     if (action === "b2b_timeout" && req.method === "POST") {
       const body = await req.json();
-      console.log("B2B Timeout received:", JSON.stringify(body, null, 2));
+      console.log("B2B Timeout received:", {
+        conversationId: body.Result?.ConversationID?.substring(0, 8) + "...",
+        timestamp: new Date().toISOString(),
+      });
 
       const result = body.Result;
       if (result?.ConversationID) {
