@@ -1,121 +1,94 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { connect as mqttConnect } from "https://deno.land/x/mqtt@0.1.4/deno/mod.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
+    "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-// MQTT Configuration (UPDATE THESE WITH YOUR BROKER DETAILS)
-const MQTT_CONFIG = {
-  broker: Deno.env.get("MQTT_BROKER_URL") || "mqtt://broker.hivemq.com:1883",
-  username: Deno.env.get("MQTT_USERNAME") || "",
-  password: Deno.env.get("MQTT_PASSWORD") || "",
-  clientId: Deno.env.get("MQTT_CLIENT_ID") || `powerflow-${crypto.randomUUID()}`,
-};
+/**
+ * MQTT Meter Edge Function
+ *
+ * Since Supabase Edge Functions can't maintain persistent MQTT connections,
+ * this function publishes commands to meters via an MQTT broker's HTTP API.
+ *
+ * Supported brokers with HTTP publish APIs:
+ * - EMQX: POST /api/v5/publish
+ * - HiveMQ: POST /api/v1/mqtt/publish
+ *
+ * The broker URL and credentials are configured via secrets:
+ * - MQTT_HTTP_API_URL: e.g. https://broker.example.com/api/v5/publish
+ * - MQTT_HTTP_API_KEY: API key or Basic auth for the HTTP API
+ * - MQTT_USERNAME / MQTT_PASSWORD: fallback Basic auth
+ */
+
+const MQTT_HTTP_API_URL = Deno.env.get("MQTT_HTTP_API_URL") || "";
+const MQTT_HTTP_API_KEY = Deno.env.get("MQTT_HTTP_API_KEY") || "";
+const MQTT_USERNAME = Deno.env.get("MQTT_USERNAME") || "";
+const MQTT_PASSWORD = Deno.env.get("MQTT_PASSWORD") || "";
 
 // Topic structure: meters/{meter_id}/{action}
 const TOPICS = {
   status: (meterId: string) => `meters/${meterId}/status`,
-  consumption: (meterId: string) => `meters/${meterId}/consumption`,
   command: (meterId: string) => `meters/${meterId}/command`,
-  response: (meterId: string) => `meters/${meterId}/response`,
 };
 
 /**
- * Connect to MQTT broker
+ * Publish a message to the MQTT broker via its HTTP API.
+ * Returns true if published successfully, false otherwise.
  */
-async function connectMQTT() {
-  const client = await mqttConnect({
-    hostname: new URL(MQTT_CONFIG.broker).hostname,
-    port: parseInt(new URL(MQTT_CONFIG.broker).port || "1883"),
-    username: MQTT_CONFIG.username || undefined,
-    password: MQTT_CONFIG.password || undefined,
-    clientId: MQTT_CONFIG.clientId,
-  });
-  return client;
-}
+async function publishViaMqttHttp(topic: string, payload: Record<string, unknown>): Promise<boolean> {
+  if (!MQTT_HTTP_API_URL) {
+    console.warn("MQTT_HTTP_API_URL not configured – skipping MQTT publish");
+    return false;
+  }
 
-/**
- * Publish command to meter
- */
-async function sendMeterCommand(meterId: string, command: string, payload: any) {
-  const client = await connectMQTT();
-  
-  const message = {
-    command,
-    payload,
-    timestamp: new Date().toISOString(),
-  };
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
 
-  await client.publish(TOPICS.command(meterId), JSON.stringify(message), { qos: 1 });
-  
-  // Wait for response with timeout
-  return new Promise((resolve, reject) => {
-    const timeout = setTimeout(() => {
-      client.disconnect();
-      reject(new Error("Meter response timeout"));
-    }, 30000); // 30 second timeout
+  if (MQTT_HTTP_API_KEY) {
+    headers["Authorization"] = `Bearer ${MQTT_HTTP_API_KEY}`;
+  } else if (MQTT_USERNAME) {
+    headers["Authorization"] = `Basic ${btoa(`${MQTT_USERNAME}:${MQTT_PASSWORD}`)}`;
+  }
 
-    client.subscribe(TOPICS.response(meterId));
-    
-    client.on("message", (topic: string, message: Uint8Array) => {
-      if (topic === TOPICS.response(meterId)) {
-        clearTimeout(timeout);
-        client.disconnect();
-        const response = JSON.parse(new TextDecoder().decode(message));
-        resolve(response);
-      }
-    });
-  });
-}
-
-/**
- * Get meter status via MQTT
- */
-async function getMeterStatus(meterId: string) {
   try {
-    const response = await sendMeterCommand(meterId, "get_status", {});
-    return response;
-  } catch (error) {
-    console.error(`Failed to get meter status for ${meterId}:`, error);
-    return null;
+    const res = await fetch(MQTT_HTTP_API_URL, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        topic,
+        payload: JSON.stringify(payload),
+        qos: 1,
+        retain: false,
+      }),
+    });
+
+    if (!res.ok) {
+      console.error(`MQTT HTTP publish failed: ${res.status} ${await res.text()}`);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.error("MQTT HTTP publish error:", err);
+    return false;
   }
 }
 
 /**
- * Send connection command to meter
+ * Send a command to a meter and return immediately.
+ * Meter responses arrive asynchronously via mqtt-webhook.
  */
-async function connectMeter(meterId: string, userId: string) {
-  const response = await sendMeterCommand(meterId, "connect_user", {
-    user_id: userId,
-    connected_at: new Date().toISOString(),
-  });
-  return response;
-}
+async function sendMeterCommand(meterId: string, command: string, payload: Record<string, unknown>) {
+  const message = {
+    command,
+    payload,
+    timestamp: new Date().toISOString(),
+    request_id: crypto.randomUUID(),
+  };
 
-/**
- * Send disconnection command to meter
- */
-async function disconnectMeter(meterId: string, userId: string) {
-  const response = await sendMeterCommand(meterId, "disconnect_user", {
-    user_id: userId,
-    disconnected_at: new Date().toISOString(),
-  });
-  return response;
-}
-
-/**
- * Update meter balance
- */
-async function updateMeterBalance(meterId: string, balanceKwh: number) {
-  const response = await sendMeterCommand(meterId, "set_balance", {
-    balance_kwh: balanceKwh,
-    updated_at: new Date().toISOString(),
-  });
-  return response;
+  const published = await publishViaMqttHttp(TOPICS.command(meterId), message);
+  return { sent: published, request_id: message.request_id };
 }
 
 serve(async (req) => {
@@ -160,187 +133,126 @@ serve(async (req) => {
     const action = url.searchParams.get("action");
     const userId = user.id;
 
-    // Get meter info by code
+    // ── device_info: look up meter from DB, optionally send status request ──
     if (action === "device_info" && req.method === "POST") {
-      const { meter_code } = await req.json();
+      const { meter_id } = await req.json();
 
-      if (!meter_code) {
-        return new Response(
-          JSON.stringify({ error: "meter_code is required" }),
-          {
-            status: 400,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          }
-        );
+      if (!meter_id) {
+        return new Response(JSON.stringify({ error: "meter_id is required" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
       }
 
-      // Get meter from database
-      const { data: meter, error: meterError } = await serviceSupabase
+      // Verify user owns meter
+      const { data: meter } = await supabase
         .from("meters")
         .select("*")
-        .eq("meter_code", meter_code)
-        .maybeSingle();
+        .eq("id", meter_id)
+        .single();
 
-      if (meterError || !meter) {
-        return new Response(
-          JSON.stringify({ error: "Meter not found" }),
-          {
-            status: 404,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          }
-        );
+      if (!meter) {
+        return new Response(JSON.stringify({ error: "Meter not found or access denied" }), {
+          status: 404,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
       }
 
-      // Try to get live status from MQTT
-      const mqttStatus = await getMeterStatus(meter.id);
+      // Fire a status request to the meter (response arrives via webhook)
+      const cmd = await sendMeterCommand(meter.id, "get_status", {});
 
       return new Response(
         JSON.stringify({
           success: true,
           meter: {
             id: meter.id,
-            meter_code: meter.meter_code,
             name: meter.name,
             property_name: meter.property_name,
             status: meter.status,
             balance_kwh: meter.balance_kwh,
             max_kwh: meter.max_kwh,
-            consumption_rate_per_hour: meter.consumption_rate_per_hour,
-            mqtt_status: mqttStatus || { online: false, message: "Status unavailable" },
+            last_sync: meter.last_sync,
           },
+          mqtt: cmd,
         }),
-        {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    // Get real-time meter status via MQTT
-    if (action === "device_status" && req.method === "POST") {
+    // ── sync_connection: tell meter a user connected ──
+    if (action === "sync_connection" && req.method === "POST") {
       const { meter_id } = await req.json();
 
       if (!meter_id) {
-        return new Response(
-          JSON.stringify({ error: "meter_id is required" }),
-          {
-            status: 400,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          }
-        );
+        return new Response(JSON.stringify({ error: "meter_id is required" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
       }
 
-      const status = await getMeterStatus(meter_id);
+      const cmd = await sendMeterCommand(meter_id, "connect_user", {
+        user_id: userId,
+        connected_at: new Date().toISOString(),
+      });
 
-      if (!status) {
-        return new Response(
-          JSON.stringify({ error: "Failed to get meter status via MQTT" }),
-          {
-            status: 500,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          }
-        );
-      }
-
-      return new Response(JSON.stringify({ success: true, status }), {
+      return new Response(JSON.stringify({ success: true, mqtt: cmd }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // Sync meter connection status via MQTT
-    if (action === "sync_connection" && req.method === "POST") {
-      const { connection_id } = await req.json();
-
-      // Get connection details
-      const { data: connection } = await serviceSupabase
-        .from("meter_connections")
-        .select("*, meters(*)")
-        .eq("id", connection_id)
-        .single();
-
-      if (!connection) {
-        return new Response(
-          JSON.stringify({ error: "Connection not found" }),
-          {
-            status: 404,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          }
-        );
-      }
-
-      // Send connect command to meter via MQTT
-      const result = await connectMeter(connection.meter_id, connection.user_id);
-
-      return new Response(
-        JSON.stringify({
-          success: true,
-          mqtt_response: result,
-        }),
-        {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
-    }
-
-    // Sync meter disconnection via MQTT
+    // ── sync_disconnection: tell meter a user disconnected ──
     if (action === "sync_disconnection" && req.method === "POST") {
       const { meter_id } = await req.json();
 
-      // Send disconnect command to meter via MQTT
-      const result = await disconnectMeter(meter_id, userId);
-
-      return new Response(
-        JSON.stringify({
-          success: true,
-          mqtt_response: result,
-        }),
-        {
+      if (!meter_id) {
+        return new Response(JSON.stringify({ error: "meter_id is required" }), {
+          status: 400,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
+        });
+      }
+
+      const cmd = await sendMeterCommand(meter_id, "disconnect_user", {
+        user_id: userId,
+        disconnected_at: new Date().toISOString(),
+      });
+
+      return new Response(JSON.stringify({ success: true, mqtt: cmd }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
-    // Update meter balance via MQTT (used when wallet balance changes)
+    // ── update_balance: push new balance to physical meter ──
     if (action === "update_balance" && req.method === "POST") {
       const { meter_id, balance_kwh } = await req.json();
 
       if (!meter_id || balance_kwh === undefined) {
         return new Response(
           JSON.stringify({ error: "meter_id and balance_kwh are required" }),
-          {
-            status: 400,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          }
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
 
-      // Send balance update command to meter via MQTT
-      const result = await updateMeterBalance(meter_id, balance_kwh);
+      const cmd = await sendMeterCommand(meter_id, "set_balance", {
+        balance_kwh,
+        updated_at: new Date().toISOString(),
+      });
 
-      // Update database
+      // Also update DB
       await serviceSupabase
         .from("meters")
         .update({ balance_kwh, updated_at: new Date().toISOString() })
         .eq("id", meter_id);
 
-      return new Response(
-        JSON.stringify({
-          success: true,
-          mqtt_response: result,
-        }),
-        {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
+      return new Response(JSON.stringify({ success: true, mqtt: cmd }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     return new Response(
       JSON.stringify({
-        error: "Unknown action. Use: device_info, device_status, sync_connection, sync_disconnection, update_balance",
+        error: "Unknown action. Use: device_info, sync_connection, sync_disconnection, update_balance",
       }),
-      {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
+      { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (err) {
     console.error("MQTT meter error:", err);
