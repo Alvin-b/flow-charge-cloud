@@ -179,7 +179,11 @@ async function initiateSTKPush(
 
 // Handle M-Pesa callback
 async function handleCallback(supabase: any, body: any) {
-  console.log("M-Pesa Callback received:", JSON.stringify(body, null, 2));
+  console.log("M-Pesa Callback received:", {
+    resultCode: body.Body?.stkCallback?.ResultCode,
+    checkoutRequestID: body.Body?.stkCallback?.CheckoutRequestID?.substring(0, 8) + "...",
+    timestamp: new Date().toISOString(),
+  });
 
   const callbackData = body.Body?.stkCallback;
   if (!callbackData) {
