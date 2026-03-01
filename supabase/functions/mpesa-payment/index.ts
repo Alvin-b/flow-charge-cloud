@@ -219,29 +219,15 @@ async function handleCallback(supabase: any, body: any) {
       (item: any) => item.Name === "Amount"
     )?.Value;
 
-    // Get user's wallet
-    const { data: wallet, error: walletError } = await supabase
-      .from("wallets")
-      .select("*")
-      .eq("user_id", transaction.user_id)
-      .single();
+    // Atomically credit wallet (race-condition safe, no read-then-write)
+    const { data: newBalance, error: creditError } = await supabase
+      .rpc("credit_wallet", {
+        p_user_id: transaction.user_id,
+        p_amount_kwh: parseFloat(transaction.amount_kwh),
+      });
 
-    if (walletError || !wallet) {
-      throw new Error("Wallet not found");
-    }
-
-    // Update wallet balance
-    const newBalance = parseFloat(wallet.balance_kwh) + parseFloat(transaction.amount_kwh);
-    
-    const { error: updateError } = await supabase
-      .from("wallets")
-      .update({
-        balance_kwh: newBalance,
-      })
-      .eq("user_id", transaction.user_id);
-
-    if (updateError) {
-      throw new Error(`Failed to update wallet: ${updateError.message}`);
+    if (creditError) {
+      throw new Error(`Failed to update wallet: ${creditError.message}`);
     }
 
     // Update transaction as completed

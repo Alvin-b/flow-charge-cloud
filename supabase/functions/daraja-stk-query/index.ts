@@ -181,15 +181,16 @@ serve(async (req) => {
           .single();
 
         if (wallet) {
-          const newBalance =
-            parseFloat(wallet.balance_kwh) +
-            parseFloat(transaction.amount_kwh);
+          // Atomically credit wallet (race-condition safe)
+          const { error: creditError } = await serviceSupabase
+            .rpc("credit_wallet", {
+              p_user_id: user.id,
+              p_amount_kwh: parseFloat(transaction.amount_kwh),
+            });
 
-          // Update wallet
-          await serviceSupabase
-            .from("wallets")
-            .update({ balance_kwh: newBalance })
-            .eq("id", wallet.id);
+          if (creditError) {
+            console.error("credit_wallet failed:", creditError);
+          }
 
           // Update transaction
           await serviceSupabase

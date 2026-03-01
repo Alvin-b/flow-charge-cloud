@@ -172,7 +172,7 @@ const Profile = () => {
               {[
                 { label: "Balance", val: `${walletBalance} kWh`, color: "text-primary" },
                 { label: "Meters", val: `${meterCount} linked`, color: "text-accent" },
-                { label: "PIN", val: profile?.pin_hash ? "Set ✓" : "Not set", color: profile?.pin_hash ? "text-success" : "text-destructive" },
+                { label: "PIN", val: profile?.has_pin ? "Set ✓" : "Not set", color: profile?.has_pin ? "text-success" : "text-destructive" },
               ].map(({ label, val, color }) => (
                 <div key={label} className="bg-white/5 rounded-xl p-3 border border-white/5 text-center">
                   <p className="text-[9px] text-muted-foreground uppercase tracking-wider">{label}</p>

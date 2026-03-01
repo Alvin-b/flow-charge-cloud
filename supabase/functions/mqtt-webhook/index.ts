@@ -126,14 +126,21 @@ serve(async (req) => {
 
         const balanceBefore = wallet?.balance_kwh || 0;
 
-        // Deduct from wallet
+        // Atomically debit wallet (race-condition safe)
         if (kwh_consumed > 0 && balanceBefore >= kwh_consumed) {
-          const newBalance = balanceBefore - kwh_consumed;
+          const { data: newBalance, error: debitError } = await supabase
+            .rpc("debit_wallet", {
+              p_user_id: connection.user_id,
+              p_amount_kwh: kwh_consumed,
+            });
 
-          await supabase
-            .from("wallets")
-            .update({ balance_kwh: newBalance })
-            .eq("user_id", connection.user_id);
+          if (debitError) {
+            console.error("debit_wallet failed:", debitError);
+            return new Response(
+              JSON.stringify({ success: false, error: "Insufficient balance" }),
+              { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            );
+          }
 
           // Log consumption
           await supabase.from("consumption_logs").insert({

@@ -57,14 +57,13 @@ const AuthGuard = ({ children }: { children: ReactNode }) => {
   if (!user) return <Navigate to="/auth/login" replace />;
 
   // If logged in but no PIN set yet, redirect to PIN setup
-  if (!profile?.pin_hash) return <Navigate to="/auth/pin" replace />;
+  if (!profile?.has_pin) return <Navigate to="/auth/pin" replace />;
 
   // Show lock screen if not unlocked this session
   if (!unlocked) {
     const biometricEnabled = localStorage.getItem(BIOMETRIC_KEY) === "true";
     return (
       <AppLockScreen
-        pinHash={profile.pin_hash}
         onUnlock={handleUnlock}
         biometricEnabled={biometricEnabled}
         onBiometricAuth={handleBiometricAuth}
