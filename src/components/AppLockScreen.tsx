@@ -2,9 +2,9 @@ import { useState, useEffect } from "react";
 import { Zap, Fingerprint, Delete } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Sounds } from "@/lib/sounds";
+import { supabase } from "@/integrations/supabase/client";
 
 interface AppLockScreenProps {
-  pinHash: string;
   onUnlock: () => void;
   biometricEnabled: boolean;
   onBiometricAuth: () => void;
@@ -18,7 +18,7 @@ const hashPin = async (pin: string): Promise<string> => {
   return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
 };
 
-const AppLockScreen = ({ pinHash, onUnlock, biometricEnabled, onBiometricAuth }: AppLockScreenProps) => {
+const AppLockScreen = ({ onUnlock, biometricEnabled, onBiometricAuth }: AppLockScreenProps) => {
   const [pin, setPin] = useState("");
   const [error, setError] = useState("");
   const [shaking, setShaking] = useState(false);
@@ -57,7 +57,9 @@ const AppLockScreen = ({ pinHash, onUnlock, biometricEnabled, onBiometricAuth }:
 
     if (next.length === 4) {
       const hash = await hashPin(next);
-      if (hash === pinHash) {
+      // Verify PIN server-side (hash never exposed to client)
+      const { data: isValid } = await supabase.rpc("verify_pin", { p_pin_hash: hash });
+      if (isValid) {
         Sounds.success();
         onUnlock();
       } else {

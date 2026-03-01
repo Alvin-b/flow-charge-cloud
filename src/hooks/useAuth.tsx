@@ -7,7 +7,7 @@ interface Profile {
   full_name: string;
   phone: string;
   email: string | null;
-  pin_hash: string | null;
+  has_pin: boolean;
   avatar_url: string | null;
 }
 
@@ -36,9 +36,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [loading, setLoading] = useState(true);
 
   const fetchProfile = async (userId: string) => {
+    // Fetch profile WITHOUT pin_hash (security: never expose hash to client)
     const { data } = await supabase
       .from("profiles")
-      .select("*")
+      .select("user_id, full_name, phone, email, avatar_url")
       .eq("user_id", userId)
       .maybeSingle();
 
@@ -49,11 +50,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         const metaName = authUser?.user_metadata?.full_name;
         if (metaName) {
           data.full_name = metaName;
-          // Persist it back so next load is faster
           supabase.from("profiles").update({ full_name: metaName }).eq("user_id", userId).then(() => {});
         }
       }
-      setProfile(data);
+
+      // Check if PIN is set via server-side function (no hash exposed)
+      const { data: hasPin } = await supabase.rpc("has_pin");
+
+      setProfile({ ...data, has_pin: !!hasPin });
     } else {
       setProfile(null);
     }

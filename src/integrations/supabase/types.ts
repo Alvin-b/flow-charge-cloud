@@ -247,6 +247,19 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      credit_wallet: {
+        Args: {
+          p_amount_kwh: number
+          p_idempotency_key?: string
+          p_user_id: string
+        }
+        Returns: number
+      }
+      debit_wallet: {
+        Args: { p_amount_kwh: number; p_user_id: string }
+        Returns: number
+      }
+      has_pin: { Args: never; Returns: boolean }
       insert_notification: {
         Args: {
           p_body: string
@@ -257,6 +270,7 @@ export type Database = {
         }
         Returns: undefined
       }
+      verify_pin: { Args: { p_pin_hash: string }; Returns: boolean }
     }
     Enums: {
       [_ in never]: never
