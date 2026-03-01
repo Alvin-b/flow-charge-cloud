@@ -35,7 +35,7 @@ const Profile = () => {
     const fetchStats = async () => {
       try {
         const [metersRes, walletRes] = await Promise.all([
-          supabase.from("meter_connections").select("id", { count: "exact", head: true }).eq("status", "active"),
+          supabase.from("meters").select("id", { count: "exact", head: true }),
           supabase.from("wallets").select("balance_kwh").maybeSingle(),
         ]);
         setMeterCount(metersRes.count ?? 0);

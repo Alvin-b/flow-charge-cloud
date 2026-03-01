@@ -4,16 +4,16 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
+    "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-// M-Pesa Configuration
-const MPESA_CONSUMER_KEY = Deno.env.get("MPESA_CONSUMER_KEY")!;
-const MPESA_CONSUMER_SECRET = Deno.env.get("MPESA_CONSUMER_SECRET")!;
-const MPESA_TILL_NUMBER = Deno.env.get("MPESA_TILL_NUMBER") || "4159923";
-const MPESA_SHORTCODE = Deno.env.get("MPESA_SHORTCODE")!; // For password generation
-const MPESA_PASSKEY = Deno.env.get("MPESA_PASSKEY")!;
-const MPESA_CALLBACK_URL = Deno.env.get("MPESA_CALLBACK_URL")!;
+// M-Pesa Configuration — uses DARAJA_ secret names
+const MPESA_CONSUMER_KEY = Deno.env.get("DARAJA_CONSUMER_KEY")!;
+const MPESA_CONSUMER_SECRET = Deno.env.get("DARAJA_CONSUMER_SECRET")!;
+const MPESA_TILL_NUMBER = "4159923";
+const MPESA_SHORTCODE = Deno.env.get("DARAJA_SHORTCODE")!;
+const MPESA_PASSKEY = Deno.env.get("DARAJA_PASSKEY")!;
+const MPESA_CALLBACK_URL = `${Deno.env.get("SUPABASE_URL")}/functions/v1/mpesa-payment?action=callback`;
 
 // M-Pesa API URLs (Production only)
 const MPESA_BASE_URL = "https://api.safaricom.co.ke";

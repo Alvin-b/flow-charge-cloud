@@ -4,14 +4,14 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
+    "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-// M-Pesa Configuration
-const MPESA_CONSUMER_KEY = Deno.env.get("MPESA_CONSUMER_KEY")!;
-const MPESA_CONSUMER_SECRET = Deno.env.get("MPESA_CONSUMER_SECRET")!;
-const MPESA_SHORTCODE = Deno.env.get("MPESA_SHORTCODE")!;
-const MPESA_PASSKEY = Deno.env.get("MPESA_PASSKEY")!;
+// M-Pesa Configuration — uses DARAJA_ secret names
+const MPESA_CONSUMER_KEY = Deno.env.get("DARAJA_CONSUMER_KEY")!;
+const MPESA_CONSUMER_SECRET = Deno.env.get("DARAJA_CONSUMER_SECRET")!;
+const MPESA_SHORTCODE = Deno.env.get("DARAJA_SHORTCODE")!;
+const MPESA_PASSKEY = Deno.env.get("DARAJA_PASSKEY")!;
 
 // Production API
 const MPESA_BASE_URL = "https://api.safaricom.co.ke";

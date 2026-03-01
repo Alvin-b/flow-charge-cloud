@@ -372,10 +372,21 @@ export const transactionApi = {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error("Not authenticated");
 
+    // Get recent transactions summary directly
     const { data, error } = await supabase
-      .rpc("get_transaction_summary", { user_uuid: user.id });
+      .from("transactions")
+      .select("*")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false })
+      .limit(50);
 
     if (error) throw error;
-    return data[0];
+
+    const completed = (data || []).filter(t => t.status === "completed");
+    return {
+      total_recharges: completed.filter(t => t.type === "recharge").length,
+      total_kwh: completed.reduce((sum, t) => sum + Number(t.amount_kwh), 0),
+      total_kes: completed.reduce((sum, t) => sum + Number(t.amount_kes), 0),
+    };
   },
 };
