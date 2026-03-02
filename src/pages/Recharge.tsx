@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Phone, CheckCircle, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -46,6 +46,29 @@ const Recharge = () => {
     return /^(0[17]\d{8}|254[17]\d{8})$/.test(cleaned);
   };
 
+  const payStateRef = useRef<PayState>("idle");
+  const cleanupRef = useRef<(() => void) | null>(null);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      cleanupRef.current?.();
+    };
+  }, []);
+
+  const updatePayState = useCallback((state: PayState) => {
+    payStateRef.current = state;
+    setPayState(state);
+  }, []);
+
+  // Helper: fetch with timeout
+  const fetchWithTimeout = async (fn: () => Promise<any>, timeoutMs = 15000) => {
+    return Promise.race([
+      fn(),
+      new Promise((_, reject) => setTimeout(() => reject(new Error("Request timeout")), timeoutMs)),
+    ]);
+  };
+
   const handlePay = async () => {
     if (!amount || parseFloat(amount) < 10) {
       toast({ title: "Invalid amount", description: "Minimum amount is KES 10", variant: "destructive" });
@@ -61,14 +84,28 @@ const Recharge = () => {
     }
 
     Sounds.charge();
-    setPayState("pending");
+    updatePayState("pending");
     
     try {
-      const result = await mpesaApi.initiateSTKPush(phone.trim(), parseFloat(amount));
+      const result = await fetchWithTimeout(
+        () => mpesaApi.initiateSTKPush(phone.trim(), parseFloat(amount)),
+        20000
+      );
       setTxId(result.transaction_id);
       const checkoutId = result.checkout_request_id;
 
-      // Listen for realtime transaction update (fastest path — callback triggers this)
+      // Hard overall timeout (90 seconds)
+      const hardTimeout = setTimeout(() => {
+        if (payStateRef.current === "pending") {
+          channel && supabase.removeChannel(channel);
+          pollTimer && clearInterval(pollTimer);
+          Sounds.error();
+          updatePayState("failed");
+          toast({ title: "Payment timeout", description: "No response received. Check your M-Pesa messages or try again.", variant: "destructive" });
+        }
+      }, 90000);
+
+      // Listen for realtime transaction update
       const channel = supabase
         .channel(`recharge-${result.transaction_id}`)
         .on("postgres_changes", {
@@ -79,59 +116,73 @@ const Recharge = () => {
         }, async (payload) => {
           const status = payload.new.status;
           if (status === "completed") {
-            supabase.removeChannel(channel);
+            cleanup();
             Sounds.success();
-            setPayState("success");
+            updatePayState("success");
             setReceiptNumber(payload.new.mpesa_receipt_number || "");
             const { data } = await supabase.from("wallets").select("balance_kwh").maybeSingle();
             if (data) setWalletBalance(data.balance_kwh);
           } else if (status === "failed" || status === "cancelled") {
-            supabase.removeChannel(channel);
+            cleanup();
             Sounds.error();
-            setPayState("failed");
+            updatePayState("failed");
             toast({ title: "Payment not completed", description: payload.new.error_message || "Transaction was not completed", variant: "destructive" });
           }
         })
         .subscribe();
 
-      // Fallback polling via STK query (in case realtime misses it)
-      await new Promise(r => setTimeout(r, 8000));
+      // Fallback polling via STK query
       let attempts = 0;
-      const maxAttempts = 8;
-      const pollInterval = setInterval(async () => {
+      const maxAttempts = 6;
+      const pollTimer = setInterval(async () => {
+        if (payStateRef.current !== "pending") {
+          clearInterval(pollTimer);
+          return;
+        }
         attempts++;
         try {
-          const queryResult = await mpesaApi.querySTKStatus(checkoutId);
-          if (queryResult.status === "completed" || queryResult.status === "failed" || queryResult.status === "cancelled" || queryResult.status === "timeout") {
-            clearInterval(pollInterval);
-            // Realtime should have already handled it, but just in case
-            if (payState === "pending") {
-              supabase.removeChannel(channel);
-              if (queryResult.status === "completed") {
-                Sounds.success();
-                setPayState("success");
-                const { data } = await supabase.from("wallets").select("balance_kwh").maybeSingle();
-                if (data) setWalletBalance(data.balance_kwh);
-              } else {
-                Sounds.error();
-                setPayState("failed");
-                toast({ title: "Payment not completed", description: queryResult.result_desc, variant: "destructive" });
-              }
-            }
+          const queryResult = await fetchWithTimeout(
+            () => mpesaApi.querySTKStatus(checkoutId),
+            12000
+          );
+          if (payStateRef.current !== "pending") return;
+          
+          if (queryResult.status === "completed") {
+            cleanup();
+            Sounds.success();
+            updatePayState("success");
+            const { data } = await supabase.from("wallets").select("balance_kwh").maybeSingle();
+            if (data) setWalletBalance(data.balance_kwh);
+          } else if (queryResult.status === "failed" || queryResult.status === "cancelled" || queryResult.status === "timeout") {
+            cleanup();
+            Sounds.error();
+            updatePayState("failed");
+            toast({ title: "Payment not completed", description: queryResult.result_desc, variant: "destructive" });
           }
         } catch (err) {
-          console.error("STK query error:", err);
+          console.warn("STK query poll error:", err);
         }
-        if (attempts >= maxAttempts) {
-          clearInterval(pollInterval);
-          supabase.removeChannel(channel);
-          setPayState("failed");
-          toast({ title: "Payment timeout", description: "Please check your transaction status or try again.", variant: "destructive" });
+        if (attempts >= maxAttempts && payStateRef.current === "pending") {
+          cleanup();
+          Sounds.error();
+          updatePayState("failed");
+          toast({ title: "Payment timeout", description: "Please check your M-Pesa messages or try again.", variant: "destructive" });
         }
-      }, 7000);
+      }, 10000);
+
+      // Start polling after initial delay
+      const initialDelay = setTimeout(() => {}, 0); // polling starts immediately via setInterval
+
+      const cleanup = () => {
+        clearTimeout(hardTimeout);
+        clearInterval(pollTimer);
+        supabase.removeChannel(channel);
+      };
+      cleanupRef.current = cleanup;
+
     } catch (error: any) {
       console.error("Payment error:", error);
-      setPayState("failed");
+      updatePayState("failed");
       toast({ title: "Payment failed", description: error.message || "Unable to process payment", variant: "destructive" });
     }
   };
