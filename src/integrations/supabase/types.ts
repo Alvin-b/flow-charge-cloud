@@ -247,6 +247,15 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      check_rate_limit: {
+        Args: {
+          p_action: string
+          p_limit: number
+          p_user_id: string
+          p_window_seconds: number
+        }
+        Returns: boolean
+      }
       credit_wallet: {
         Args: {
           p_amount_kwh: number

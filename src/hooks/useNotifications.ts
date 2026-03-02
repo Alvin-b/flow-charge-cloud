@@ -77,7 +77,7 @@ export function useLowBalanceAlert({ threshold, checkInterval = 30000 }: LowBala
             toast({
               title: "Low Balance Alert",
               description: `Your wallet balance is ${data.balance_kwh.toFixed(1)} kWh. Consider recharging soon.`,
-              variant: "warning"
+              variant: "destructive"
             })
           } else if (data.balance_kwh >= threshold) {
             setHasAlerted(false)
