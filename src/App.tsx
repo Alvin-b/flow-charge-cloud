@@ -22,6 +22,12 @@ import Meters from "./pages/Meters";
 import Notifications from "./pages/Notifications";
 import Install from "./pages/Install";
 import NotFound from "./pages/NotFound";
+import AdminDashboard from "./pages/admin/AdminDashboard";
+import AdminUsers from "./pages/admin/AdminUsers";
+import AdminMeters from "./pages/admin/AdminMeters";
+import AdminTransactions from "./pages/admin/AdminTransactions";
+import AdminSettings from "./pages/admin/AdminSettings";
+import AdminPlaceholder from "./pages/admin/AdminPlaceholder";
 
 const queryClient = new QueryClient();
 
@@ -63,6 +69,23 @@ const App = () => {
                 <Route path="/meters" element={<AuthGuard><Meters /></AuthGuard>} />
                 <Route path="/notifications" element={<AuthGuard><Notifications /></AuthGuard>} />
                 <Route path="/install" element={<Install />} />
+
+                {/* Admin routes — no auth guard for now */}
+                <Route path="/admin" element={<AdminDashboard />} />
+                <Route path="/admin/users" element={<AdminUsers />} />
+                <Route path="/admin/meters" element={<AdminMeters />} />
+                <Route path="/admin/transactions" element={<AdminTransactions />} />
+                <Route path="/admin/recharges" element={<AdminTransactions />} />
+                <Route path="/admin/transfers" element={<AdminTransactions />} />
+                <Route path="/admin/settings" element={<AdminSettings />} />
+                <Route path="/admin/analytics" element={<AdminPlaceholder title="Analytics" description="Revenue charts, usage trends, and system metrics" />} />
+                <Route path="/admin/activity" element={<AdminPlaceholder title="Activity Log" description="Audit trail of admin and system actions" />} />
+                <Route path="/admin/wallets" element={<AdminPlaceholder title="Wallets" description="View and manage all user wallets" />} />
+                <Route path="/admin/meter-commands" element={<AdminPlaceholder title="Meter Commands" description="MQTT command history and remote control" />} />
+                <Route path="/admin/kplc" element={<AdminPlaceholder title="KPLC Payments" description="B2B payment pool status and history" />} />
+                <Route path="/admin/notifications" element={<AdminPlaceholder title="Notifications" description="Send broadcast notifications to users" />} />
+                <Route path="/admin/security" element={<AdminPlaceholder title="Security" description="Rate limits, audit logs, and access controls" />} />
+
                 <Route path="*" element={<NotFound />} />
               </Routes>
             </BrowserRouter>
