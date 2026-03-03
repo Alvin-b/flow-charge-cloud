@@ -2,3 +2,27 @@ project_id = "kbhlevuhbdwmtqnaqzyj"
 
 [functions.mpesa-payment]
 verify_jwt = false
+
+[functions.consumption-stats]
+verify_jwt = false
+
+[functions.meter-connect]
+verify_jwt = false
+
+[functions.mqtt-meter]
+verify_jwt = false
+
+[functions.mqtt-webhook]
+verify_jwt = false
+
+[functions.tuya-meter]
+verify_jwt = false
+
+[functions.p2p-transfer]
+verify_jwt = false
+
+[functions.daraja-stk-query]
+verify_jwt = false
+
+[functions.kplc-b2b]
+verify_jwt = false
