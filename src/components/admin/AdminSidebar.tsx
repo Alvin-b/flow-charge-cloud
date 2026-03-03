@@ -30,7 +30,7 @@ import {
 } from "@/components/ui/sidebar";
 
 const overviewItems = [
-  { title: "Dashboard", url: "/admin", icon: LayoutDashboard },
+  { title: "Dashboard", url: "/admin/dashboard", icon: LayoutDashboard },
   { title: "Analytics", url: "/admin/analytics", icon: BarChart3 },
   { title: "Activity Log", url: "/admin/activity", icon: Activity },
 ];

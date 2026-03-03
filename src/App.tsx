@@ -75,7 +75,7 @@ const App = () => {
                     reachable by accounts whose `profiles.is_admin` flag is true.
                     the guard bypasses the PIN/unlock flow so administrators don't
                     have to set a wallet PIN just to access the dashboard. */}
-                <Route path="/admin" element={<AdminGuard><AdminDashboard /></AdminGuard>} />
+                <Route path="/admin/dashboard" element={<AdminGuard><AdminDashboard /></AdminGuard>} />
                 <Route path="/admin/users" element={<AdminGuard><AdminUsers /></AdminGuard>} />
                 <Route path="/admin/meters" element={<AdminGuard><AdminMeters /></AdminGuard>} />
                 <Route path="/admin/transactions" element={<AdminGuard><AdminTransactions /></AdminGuard>} />

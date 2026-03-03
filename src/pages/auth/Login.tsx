@@ -37,7 +37,7 @@ const Login = () => {
           .eq("user_id", userId)
           .maybeSingle();
         if (profile?.is_admin) {
-          navigate("/admin", { replace: true });
+          navigate("/admin/dashboard", { replace: true });
           return;
         }
       }

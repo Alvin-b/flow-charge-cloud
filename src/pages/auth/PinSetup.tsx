@@ -50,7 +50,7 @@ const PinSetup = () => {
                 // after updating the profile we can inspect the auth context
                 // directly; refreshProfile has already populated the latest values.
                 if (profile?.is_admin) {
-                  navigate("/admin", { replace: true });
+                  navigate("/admin/dashboard", { replace: true });
                 } else {
                   navigate("/", { replace: true });
                 }
