@@ -63,15 +63,18 @@ const StatChip = ({ icon: Icon, label, value, color }: { icon: React.ElementType
 const Home = () => {
   const navigate = useNavigate();
   const { theme } = useTheme();
-  const { profile } = useAuth();
+  const { user, profile, loading: authLoading } = useAuth();
   const [wallet, setWallet] = useState<Wallet | null>(null);
   const [recentTxs, setRecentTxs] = useState<Transaction[]>([]);
   const [meterCount, setMeterCount] = useState(0);
   const [unreadCount, setUnreadCount] = useState(0);
-  const [loading, setLoading] = useState(true);
+  const [dataLoading, setDataLoading] = useState(true);
 
   useEffect(() => {
-    // Only fetch from direct DB tables (fast) — no edge function calls on Home
+    // Wait for auth to be ready before querying RLS-protected tables
+    if (authLoading || !user) return;
+
+    let mounted = true;
     const fetchData = async () => {
       try {
         const [walletRes, txRes, notifRes, metersRes] = await Promise.all([
@@ -80,29 +83,29 @@ const Home = () => {
           supabase.from("notifications").select("id", { count: "exact", head: true }).eq("read", false),
           supabase.from("meters").select("id", { count: "exact", head: true }),
         ]);
+        if (!mounted) return;
         setWallet(walletRes.data ?? { balance_kwh: 0, max_kwh: 200 });
         setRecentTxs((txRes.data as Transaction[]) ?? []);
         setUnreadCount(notifRes.count ?? 0);
         setMeterCount(metersRes.count ?? 0);
       } catch (err) {
         console.error("Home fetch error:", err);
-        setWallet(prev => prev ?? { balance_kwh: 0, max_kwh: 200 });
+        if (mounted) setWallet(prev => prev ?? { balance_kwh: 0, max_kwh: 200 });
       } finally {
-        setLoading(false);
+        if (mounted) setDataLoading(false);
       }
     };
     fetchData();
 
-    // Realtime wallet updates for instant balance refresh after payment
     const channel = supabase
       .channel("home-wallet")
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "wallets" }, (payload) => {
-        setWallet({ balance_kwh: payload.new.balance_kwh, max_kwh: payload.new.max_kwh });
+        if (mounted) setWallet({ balance_kwh: payload.new.balance_kwh, max_kwh: payload.new.max_kwh });
       })
       .subscribe();
 
-    return () => { supabase.removeChannel(channel); };
-  }, []);
+    return () => { mounted = false; supabase.removeChannel(channel); };
+  }, [authLoading, user]);
 
   const balance = wallet?.balance_kwh ?? 0;
   const max = wallet?.max_kwh ?? 200;
@@ -129,6 +132,8 @@ const Home = () => {
     { label: "Meters", icon: Bolt, path: "/meters", gradient: "bg-success", glow: "" },
     { label: "Analytics", icon: BarChart3, path: "/analytics", gradient: "bg-accent", glow: "glow-amber" },
   ];
+
+  const loading = authLoading || dataLoading;
 
   if (loading) {
     return (
