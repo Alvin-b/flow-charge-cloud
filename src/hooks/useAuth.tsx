@@ -9,6 +9,8 @@ interface Profile {
   email: string | null;
   has_pin: boolean;
   avatar_url: string | null;
+  // admin users will have this flag set by a migration or manually
+  is_admin?: boolean;
 }
 
 interface AuthContextType {
@@ -39,9 +41,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     // Fetch profile from safe view (excludes pin_hash)
     const { data } = await (supabase
       .from("profiles_safe" as any)
-      .select("user_id, full_name, phone, email, avatar_url")
+      // include the is_admin flag in case it's present
+      .select("user_id, full_name, phone, email, avatar_url, is_admin")
       .eq("user_id", userId)
-      .maybeSingle()) as { data: { user_id: string; full_name: string; phone: string; email: string | null; avatar_url: string | null } | null };
+      .maybeSingle()) as { data: { user_id: string; full_name: string; phone: string; email: string | null; avatar_url: string | null; is_admin?: boolean } | null };
 
     if (data) {
       // If profile exists but full_name is missing, try to fill it from Supabase Auth user_metadata

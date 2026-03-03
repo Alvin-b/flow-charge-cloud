@@ -24,6 +24,23 @@ const Login = () => {
         password,
       });
       if (error) throw error;
+      // determine whether this account is marked as admin so we can send them
+      // directly to the correct section and avoid the PIN setup screen.
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      const userId = session?.user?.id;
+      if (userId) {
+        const { data: profile } = await supabase
+          .from("profiles_safe" as any)
+          .select("is_admin")
+          .eq("user_id", userId)
+          .maybeSingle();
+        if (profile?.is_admin) {
+          navigate("/admin", { replace: true });
+          return;
+        }
+      }
       navigate("/", { replace: true });
     } catch (err: any) {
       toast({ title: "Error", description: err.message, variant: "destructive" });

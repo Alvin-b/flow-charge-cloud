@@ -15,7 +15,7 @@ const hashPin = async (pin: string): Promise<string> => {
 
 const PinSetup = () => {
   const navigate = useNavigate();
-  const { user, refreshProfile } = useAuth();
+  const { user, profile, refreshProfile } = useAuth();
   const { toast } = useToast();
   const [step, setStep] = useState<"create" | "confirm">("create");
   const [pin, setPin] = useState("");
@@ -47,7 +47,13 @@ const PinSetup = () => {
                   if (upsertError) throw upsertError;
                   await refreshProfile();
                 }
-                navigate("/", { replace: true });
+                // after updating the profile we can inspect the auth context
+                // directly; refreshProfile has already populated the latest values.
+                if (profile?.is_admin) {
+                  navigate("/admin", { replace: true });
+                } else {
+                  navigate("/", { replace: true });
+                }
               } catch (err: any) {
                 toast({ title: "Error saving PIN", description: err.message, variant: "destructive" });
               } finally {

@@ -254,10 +254,12 @@ export type Database = {
           phone: string | null
           updated_at: string | null
           user_id: string | null
+          is_admin: boolean | null
         }
         Insert: {
           avatar_url?: string | null
           created_at?: string | null
+          is_admin?: boolean | null
           email?: string | null
           full_name?: string | null
           id?: string | null
