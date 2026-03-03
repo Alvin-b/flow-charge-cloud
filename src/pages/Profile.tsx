@@ -279,9 +279,9 @@ const Profile = () => {
 
       {/* ── Edit Profile Modal ── */}
       {editOpen && (
-        <div className="fixed inset-0 z-50 flex items-end">
+        <div className="fixed inset-0 z-[60] flex items-end">
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setEditOpen(false)} />
-          <div className="relative w-full glass-card rounded-t-3xl p-6 border-t border-primary/15 animate-slide-up max-h-[85vh] overflow-y-auto">
+          <div className="relative w-full glass-card rounded-t-3xl p-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] border-t border-primary/15 animate-slide-up max-h-[85vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-6">
               <div>
                 <h2 className="text-xl font-bold text-foreground">Edit Profile</h2>

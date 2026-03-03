@@ -395,9 +395,9 @@ const Meters = () => {
 
       {/* ── Add Meter Modal ── */}
       {modal === "add" && (
-        <div className="fixed inset-0 z-50 flex items-end">
+        <div className="fixed inset-0 z-[60] flex items-end">
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={closeModal} />
-          <div className="relative w-full glass-card rounded-t-3xl p-6 border-t border-primary/15 animate-slide-up max-h-[90vh] overflow-y-auto">
+          <div className="relative w-full glass-card rounded-t-3xl p-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] border-t border-primary/15 animate-slide-up max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-6">
               <div>
                 <h2 className="text-xl font-bold text-foreground">Connect Meter</h2>
@@ -537,9 +537,9 @@ const Meters = () => {
 
       {/* ── Disconnect Confirm Modal ── */}
       {modal === "disconnect_confirm" && activeConn && (
-        <div className="fixed inset-0 z-50 flex items-end">
+        <div className="fixed inset-0 z-[60] flex items-end">
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={closeModal} />
-          <div className="relative w-full glass-card rounded-t-3xl p-6 border-t border-destructive/20 animate-slide-up space-y-4">
+          <div className="relative w-full glass-card rounded-t-3xl p-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] border-t border-destructive/20 animate-slide-up space-y-4">
             <div className="flex items-center justify-between">
               <div>
                 <h2 className="text-xl font-bold text-foreground">Disconnect Meter</h2>
