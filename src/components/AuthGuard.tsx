@@ -56,8 +56,16 @@ const AuthGuard = ({ children }: { children: ReactNode }) => {
 
   if (!user) return <Navigate to="/auth/login" replace />;
 
-  // If logged in but no PIN set yet, redirect to PIN setup
-  if (!profile?.has_pin) return <Navigate to="/auth/pin" replace />;
+  // If logged in but we haven't fetched a profile row yet, send them to
+  // registration. This covers brand‑new accounts and avoids showing the PIN
+  // screen to somebody who hasn't even entered their details.
+  if (profile === null) {
+    return <Navigate to="/auth/register" replace />;
+  }
+
+  // If logged in and a profile exists but they haven't configured a PIN yet,
+  // force PIN setup before anything else.
+  if (!profile.has_pin) return <Navigate to="/auth/pin" replace />;
 
   // Show lock screen if not unlocked this session
   if (!unlocked) {
