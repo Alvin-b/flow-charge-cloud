@@ -477,6 +477,21 @@ serve(async (req) => {
   }
 
   try {
+    // Validate webhook secret
+    const webhookSecret = Deno.env.get("MQTT_WEBHOOK_SECRET");
+    if (webhookSecret) {
+      const providedSecret = req.headers.get("X-Webhook-Secret") || 
+        req.headers.get("Authorization")?.replace("Bearer ", "");
+      if (providedSecret !== webhookSecret) {
+        return new Response(JSON.stringify({ error: "Unauthorized" }), {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    } else {
+      console.warn("[MQTT Webhook] MQTT_WEBHOOK_SECRET not configured - running without auth");
+    }
+
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!

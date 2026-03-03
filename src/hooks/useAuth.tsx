@@ -36,12 +36,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [loading, setLoading] = useState(true);
 
   const fetchProfile = async (userId: string) => {
-    // Fetch profile WITHOUT pin_hash (security: never expose hash to client)
-    const { data } = await supabase
-      .from("profiles")
+    // Fetch profile from safe view (excludes pin_hash)
+    const { data } = await (supabase
+      .from("profiles_safe" as any)
       .select("user_id, full_name, phone, email, avatar_url")
       .eq("user_id", userId)
-      .maybeSingle();
+      .maybeSingle()) as { data: { user_id: string; full_name: string; phone: string; email: string | null; avatar_url: string | null } | null };
 
     if (data) {
       // If profile exists but full_name is missing, try to fill it from Supabase Auth user_metadata
