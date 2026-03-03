@@ -65,14 +65,11 @@ const Profile = () => {
     }
     setEditSaving(true);
     try {
-      const { error } = await supabase
-        .from("profiles")
-        .update({
-          full_name: editName.trim(),
-          phone: editPhone.trim() || null,
-          email: editEmail.trim() || null,
-        })
-        .eq("user_id", profile!.user_id);
+      const { error } = await supabase.rpc("upsert_profile", {
+        p_full_name: editName.trim(),
+        p_phone: editPhone.trim() || null,
+        p_email: editEmail.trim() || null,
+      });
       if (error) throw error;
       await refreshProfile();
       Sounds.success();

@@ -31,14 +31,13 @@ const Register = () => {
       });
       if (error) throw error;
 
-      // Create profile
+      // Save profile via RPC (avoids permission error on upsert conflict)
       if (data.user) {
-        await supabase.from("profiles").upsert({
-          user_id: data.user.id,
-          full_name: fullName.trim(),
-          phone: phone.trim() || null,
-          email: email.trim(),
-        }, { onConflict: "user_id" });
+        await supabase.rpc("upsert_profile", {
+          p_full_name: fullName.trim(),
+          p_phone: phone.trim() || null,
+          p_email: email.trim(),
+        });
       }
 
       toast({

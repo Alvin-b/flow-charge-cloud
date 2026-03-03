@@ -53,7 +53,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         const metaName = authUser?.user_metadata?.full_name;
         if (metaName) {
           data.full_name = metaName;
-          supabase.from("profiles").update({ full_name: metaName }).eq("user_id", userId).then(() => {});
+          // update using RPC to avoid profile select permission
+          supabase.rpc("upsert_profile", {
+            p_full_name: metaName,
+            p_phone: data.phone || null,
+            p_email: data.email || null,
+          }).then(() => {});
         }
       }
 

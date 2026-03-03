@@ -103,11 +103,11 @@ const OTPVerify = () => {
 
       // If registration, create profile
       if (isRegistration && data.user) {
-        const { error: profileError } = await supabase.from("profiles").upsert({
-          user_id: data.user.id,
-          full_name: fullName,
-          phone: phone,
-        }, { onConflict: "user_id" });
+        const { error: profileError } = await supabase.rpc("upsert_profile", {
+          p_full_name: fullName,
+          p_phone: phone,
+          p_email: null,
+        });
         if (profileError) console.error("Profile create error:", profileError);
       }
 

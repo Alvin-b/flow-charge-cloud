@@ -41,10 +41,8 @@ const PinSetup = () => {
               try {
                 const pinHash = await hashPin(pin);
                 if (user) {
-                  const { error: upsertError } = await supabase
-                    .from("profiles")
-                    .upsert({ user_id: user.id, pin_hash: pinHash }, { onConflict: "user_id" });
-                  if (upsertError) throw upsertError;
+                  const { error: setError } = await supabase.rpc("set_pin", { p_pin_hash: pinHash });
+                  if (setError) throw setError;
                   await refreshProfile();
                 }
                 // after updating the profile we can inspect the auth context
