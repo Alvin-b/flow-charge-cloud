@@ -1,4 +1,4 @@
-1883 import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   ArrowLeft, Plus, Zap, Wifi, WifiOff, QrCode, X,
