@@ -132,6 +132,7 @@ export type Database = {
           email: string | null
           full_name: string
           id: string
+          is_admin: boolean
           phone: string
           pin_hash: string | null
           updated_at: string
@@ -143,6 +144,7 @@ export type Database = {
           email?: string | null
           full_name?: string
           id?: string
+          is_admin?: boolean
           phone?: string
           pin_hash?: string | null
           updated_at?: string
@@ -154,6 +156,7 @@ export type Database = {
           email?: string | null
           full_name?: string
           id?: string
+          is_admin?: boolean
           phone?: string
           pin_hash?: string | null
           updated_at?: string
@@ -251,18 +254,18 @@ export type Database = {
           email: string | null
           full_name: string | null
           id: string | null
+          is_admin: boolean | null
           phone: string | null
           updated_at: string | null
           user_id: string | null
-          is_admin: boolean | null
         }
         Insert: {
           avatar_url?: string | null
           created_at?: string | null
-          is_admin?: boolean | null
           email?: string | null
           full_name?: string | null
           id?: string | null
+          is_admin?: boolean | null
           phone?: string | null
           updated_at?: string | null
           user_id?: string | null
@@ -273,6 +276,7 @@ export type Database = {
           email?: string | null
           full_name?: string | null
           id?: string | null
+          is_admin?: boolean | null
           phone?: string | null
           updated_at?: string | null
           user_id?: string | null
@@ -311,6 +315,11 @@ export type Database = {
           p_type: string
           p_user_id: string
         }
+        Returns: undefined
+      }
+      set_pin: { Args: { p_pin_hash: string }; Returns: undefined }
+      upsert_profile: {
+        Args: { p_email?: string; p_full_name: string; p_phone?: string }
         Returns: undefined
       }
       verify_pin: { Args: { p_pin_hash: string }; Returns: boolean }

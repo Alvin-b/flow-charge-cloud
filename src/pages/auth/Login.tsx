@@ -31,11 +31,11 @@ const Login = () => {
       } = await supabase.auth.getSession();
       const userId = session?.user?.id;
       if (userId) {
-        const { data: profile } = await supabase
+      const { data: profile } = await (supabase
           .from("profiles_safe" as any)
           .select("is_admin")
           .eq("user_id", userId)
-          .maybeSingle();
+          .maybeSingle()) as { data: { is_admin?: boolean } | null };
         if (profile?.is_admin) {
           navigate("/admin/dashboard", { replace: true });
           return;
