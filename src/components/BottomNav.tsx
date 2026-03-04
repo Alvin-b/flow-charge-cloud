@@ -1,12 +1,12 @@
 import { Link } from "react-router-dom";
-import { Home, Zap, BarChart3, ArrowLeftRight, User } from "lucide-react";
+import { Home, Zap, BarChart3, Cpu, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTheme } from "./ThemeProvider";
 import { Sounds } from "@/lib/sounds";
 
 const tabs = [
   { path: "/", icon: Home, label: "Home" },
-  { path: "/meters", icon: Zap, label: "Meters" },
+  { path: "/iot", icon: Cpu, label: "IoT Hub" },
   { path: "/recharge", icon: null, label: "Recharge" }, // Center FAB
   { path: "/analytics", icon: BarChart3, label: "Stats" },
   { path: "/profile", icon: User, label: "Profile" },

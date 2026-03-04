@@ -29,6 +29,7 @@ import AdminTransactions from "./pages/admin/AdminTransactions";
 import AdminSettings from "./pages/admin/AdminSettings";
 import AdminPlaceholder from "./pages/admin/AdminPlaceholder";
 import AdminGuard from "./components/AdminGuard";
+import IoTHub from "./pages/IoTHub";
 
 const queryClient = new QueryClient();
 
@@ -63,6 +64,7 @@ const App = () => {
 
                 {/* Protected app routes */}
                 <Route path="/" element={<AuthGuard><Home /></AuthGuard>} />
+                <Route path="/iot" element={<AuthGuard><IoTHub /></AuthGuard>} />
                 <Route path="/recharge" element={<AuthGuard><Recharge /></AuthGuard>} />
                 <Route path="/analytics" element={<AuthGuard><Analytics /></AuthGuard>} />
                 <Route path="/transfer" element={<AuthGuard><Transfer /></AuthGuard>} />

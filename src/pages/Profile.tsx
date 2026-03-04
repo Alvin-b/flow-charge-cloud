@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   ChevronRight, Moon, Sun, Fingerprint, Shield, Bell, HelpCircle, LogOut,
-  Zap, User, Mail, Phone, Edit3, Crown, ExternalLink, X, Check, Loader2
+  Zap, User, Mail, Phone, Edit3, Crown, ExternalLink, X, Check, Loader2, Cpu
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
@@ -13,6 +13,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { Sounds } from "@/lib/sounds";
+import { useIoTModules } from "@/hooks/useIoTModules";
+import { IoTSettingsPanel } from "@/components/iot/IoTSettingsPanel";
 
 const Profile = () => {
   const navigate = useNavigate();
@@ -20,6 +22,7 @@ const Profile = () => {
   const { profile, signOut, refreshProfile } = useAuth();
   const { toast } = useToast();
   const [biometric, setBiometric] = useState(() => localStorage.getItem("powerflow-biometric-enabled") === "true");
+  const { enabledModules, toggleModule } = useIoTModules();
   const [biometricSupported, setBiometricSupported] = useState(false);
   const [meterCount, setMeterCount] = useState(0);
   const [walletBalance, setWalletBalance] = useState(0);
@@ -244,7 +247,16 @@ const Profile = () => {
             subtitle={`${meterCount} meter${meterCount !== 1 ? "s" : ""} connected`}
             onClick={() => navigate("/meters")} 
           />
+          <MenuItem
+            icon={Cpu}
+            label="IoT Hub"
+            subtitle={`${enabledModules.length} modules active`}
+            onClick={() => navigate("/iot")}
+          />
         </Section>
+
+        {/* IoT Module Toggles */}
+        <IoTSettingsPanel enabledModules={enabledModules} onToggle={toggleModule} />
 
         <Section title="Appearance">
           <div className="flex items-center gap-3 px-4 py-3.5 border-b border-border/10">
