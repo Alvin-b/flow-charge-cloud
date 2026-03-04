@@ -89,13 +89,6 @@ const App = () => {
                 <Route path="/admin/kplc" element={<AdminGuard><AdminPlaceholder title="KPLC Payments" description="B2B payment pool status and history" /></AdminGuard>} />
                 <Route path="/admin/notifications" element={<AdminGuard><AdminPlaceholder title="Notifications" description="Send broadcast notifications to users" /></AdminGuard>} />
                 <Route path="/admin/security" element={<AdminGuard><AdminPlaceholder title="Security" description="Rate limits, audit logs, and access controls" /></AdminGuard>} />
-                <Route path="/admin/analytics" element={<AdminPlaceholder title="Analytics" description="Revenue charts, usage trends, and system metrics" />} />
-                <Route path="/admin/activity" element={<AdminPlaceholder title="Activity Log" description="Audit trail of admin and system actions" />} />
-                <Route path="/admin/wallets" element={<AdminPlaceholder title="Wallets" description="View and manage all user wallets" />} />
-                <Route path="/admin/meter-commands" element={<AdminPlaceholder title="Meter Commands" description="MQTT command history and remote control" />} />
-                <Route path="/admin/kplc" element={<AdminPlaceholder title="KPLC Payments" description="B2B payment pool status and history" />} />
-                <Route path="/admin/notifications" element={<AdminPlaceholder title="Notifications" description="Send broadcast notifications to users" />} />
-                <Route path="/admin/security" element={<AdminPlaceholder title="Security" description="Rate limits, audit logs, and access controls" />} />
 
                 <Route path="*" element={<NotFound />} />
               </Routes>
