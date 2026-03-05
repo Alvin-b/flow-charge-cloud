@@ -4,6 +4,7 @@ import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
 import { cn } from "@/lib/utils";
 import { ModuleCard } from "./ModuleCard";
+import { EditableDeviceName } from "./EditableDeviceName";
 
 interface Light {
   id: string;
@@ -32,6 +33,10 @@ export function SmartLightingWidget() {
     setLights(prev => prev.map(l => l.id === id ? { ...l, brightness: val } : l));
   };
 
+  const rename = (id: string, newName: string) => {
+    setLights(prev => prev.map(l => l.id === id ? { ...l, name: newName } : l));
+  };
+
   const onCount = lights.filter(l => l.on).length;
 
   return (
@@ -52,18 +57,22 @@ export function SmartLightingWidget() {
           <div key={light.id} className="flex items-center gap-3 p-2.5 rounded-xl bg-muted/5 border border-border/5">
             <div
               className={cn(
-                "w-8 h-8 rounded-lg flex items-center justify-center transition-all duration-300",
+                "w-9 h-9 rounded-lg flex items-center justify-center transition-all duration-500",
                 light.on ? "bg-accent/20 shadow-sm" : "bg-muted/20"
               )}
-              style={light.on ? { boxShadow: `0 0 12px ${light.color}40` } : {}}
+              style={light.on ? { boxShadow: `0 0 16px ${light.color}50, 0 0 4px ${light.color}30` } : {}}
             >
               <Lightbulb
-                className={cn("w-4 h-4 transition-colors", light.on ? "text-accent" : "text-muted-foreground/40")}
+                className={cn("w-4 h-4 transition-all duration-300", light.on ? "text-accent drop-shadow-lg" : "text-muted-foreground/40")}
+                style={light.on ? { filter: `drop-shadow(0 0 4px ${light.color})` } : {}}
               />
             </div>
             <div className="flex-1 min-w-0">
               <div className="flex items-center justify-between mb-1">
-                <span className="text-xs font-medium text-foreground">{light.name}</span>
+                <EditableDeviceName
+                  name={light.name}
+                  onRename={(n) => rename(light.id, n)}
+                />
                 <Switch
                   checked={light.on}
                   onCheckedChange={() => toggle(light.id)}
@@ -80,7 +89,7 @@ export function SmartLightingWidget() {
                     step={5}
                     className="flex-1 [&_[role=slider]]:h-3 [&_[role=slider]]:w-3"
                   />
-                  <span className="text-[10px] text-muted-foreground w-7 text-right">{light.brightness}%</span>
+                  <span className="text-[10px] text-muted-foreground w-7 text-right tabular-nums">{light.brightness}%</span>
                 </div>
               )}
             </div>
