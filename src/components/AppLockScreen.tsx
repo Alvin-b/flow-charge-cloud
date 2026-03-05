@@ -25,14 +25,11 @@ const AppLockScreen = ({ onUnlock, biometricEnabled, onBiometricAuth }: AppLockS
   const [biometricAttempted, setBiometricAttempted] = useState(false);
   const [biometricFailed, setBiometricFailed] = useState(false);
 
-  // Auto-trigger biometric on mount if enabled
+  // Auto-trigger biometric immediately on mount if enabled
   useEffect(() => {
     if (biometricEnabled && !biometricAttempted) {
       setBiometricAttempted(true);
-      // Small delay to let UI render first
-      setTimeout(() => {
-        handleBiometricAuth();
-      }, 300);
+      handleBiometricAuth();
     }
   }, [biometricEnabled, biometricAttempted]);
 
@@ -57,11 +54,12 @@ const AppLockScreen = ({ onUnlock, biometricEnabled, onBiometricAuth }: AppLockS
 
     if (next.length === 4) {
       const hash = await hashPin(next);
-      // Verify PIN server-side (hash never exposed to client)
       const { data: isValid } = await supabase.rpc("verify_pin", { p_pin_hash: hash });
       if (isValid) {
         Sounds.success();
+        // Dismiss any pending biometric prompt by unmounting immediately
         onUnlock();
+        return;
       } else {
         Sounds.error();
         setShaking(true);
