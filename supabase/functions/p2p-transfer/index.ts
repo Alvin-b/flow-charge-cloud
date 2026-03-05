@@ -144,14 +144,14 @@ serve(async (req) => {
 
       const { data: recipientProfiles } = await supabase
         .from("profiles")
-        .select("id, full_name, phone")
+        .select("user_id, full_name, phone")
         .in("phone", phoneVariants);
 
       let recipientUserId: string | null = null;
       let recipientName: string | null = null;
 
       if (recipientProfiles && recipientProfiles.length > 0) {
-        recipientUserId = recipientProfiles[0].id;
+        recipientUserId = recipientProfiles[0].user_id;
         recipientName = recipientProfiles[0].full_name;
       }
 
