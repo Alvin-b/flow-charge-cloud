@@ -1,8 +1,10 @@
-import { useState } from "react";
-import { Droplets, Waves, AlertTriangle, Clock, TrendingDown } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Droplets, Waves, AlertTriangle, Clock, TrendingDown, Gauge } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import { ModuleCard } from "./ModuleCard";
+import { AnimatedWaterTank } from "./AnimatedWaterTank";
+import { EditableDeviceName } from "./EditableDeviceName";
 
 interface WaterDevice {
   id: string;
@@ -24,11 +26,33 @@ const mockDevices: WaterDevice[] = [
 export function WaterWidget() {
   const [devices, setDevices] = useState(mockDevices);
 
+  // Simulate real-time water level changes
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setDevices(prev => prev.map(d => {
+        if (d.type === "tank" && d.active) {
+          const delta = (Math.random() - 0.52) * 2; // slight drain tendency
+          return { ...d, value: Math.max(5, Math.min(100, d.value + delta)) };
+        }
+        if (d.type === "flow" && d.active) {
+          const delta = (Math.random() - 0.5) * 0.4;
+          return { ...d, value: Math.max(0, +(d.value + delta).toFixed(1)) };
+        }
+        return d;
+      }));
+    }, 3000);
+    return () => clearInterval(interval);
+  }, []);
+
   const toggle = (id: string) => {
     setDevices(prev => prev.map(d => d.id === id ? { ...d, active: !d.active } : d));
   };
 
-  const lowTanks = devices.filter(d => d.type === "tank" && d.value < 40);
+  const rename = (id: string, newName: string) => {
+    setDevices(prev => prev.map(d => d.id === id ? { ...d, name: newName } : d));
+  };
+
+  const lowTanks = devices.filter(d => d.type === "tank" && d.value < 30);
   const totalFlow = devices.filter(d => d.type === "flow" && d.active).reduce((s, d) => s + d.value, 0);
 
   return (
@@ -45,50 +69,82 @@ export function WaterWidget() {
       ) : undefined}
     >
       <div className="space-y-3">
-        {devices.map(device => (
+        {/* Tank devices with animated visualization */}
+        {devices.filter(d => d.type === "tank").map(device => (
+          <div key={device.id} className="flex items-center gap-3 p-3 rounded-xl bg-muted/5 border border-border/5">
+            <AnimatedWaterTank level={Math.round(device.value)} size="md" />
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center justify-between mb-1">
+                <EditableDeviceName
+                  name={device.name}
+                  onRename={(n) => rename(device.id, n)}
+                />
+                <Switch
+                  checked={device.active}
+                  onCheckedChange={() => toggle(device.id)}
+                  className="scale-75 data-[state=checked]:bg-[hsl(var(--cyan))]"
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <span className={cn(
+                  "text-lg font-bold tabular-nums transition-colors",
+                  device.value < 30 ? "text-destructive" : "text-[hsl(var(--cyan))]"
+                )}>
+                  {Math.round(device.value)}
+                </span>
+                <span className="text-[10px] text-muted-foreground">{device.unit}</span>
+              </div>
+              <div className="w-full h-1.5 rounded-full bg-muted/20 mt-1.5 overflow-hidden">
+                <div
+                  className={cn(
+                    "h-full rounded-full transition-all duration-1000 ease-out",
+                    device.value < 15 ? "bg-destructive" : device.value < 30 ? "bg-accent" : "bg-[hsl(var(--cyan))]"
+                  )}
+                  style={{ width: `${device.value}%` }}
+                />
+              </div>
+            </div>
+          </div>
+        ))}
+
+        {/* Flow & irrigation devices */}
+        {devices.filter(d => d.type !== "tank").map(device => (
           <div key={device.id} className="flex items-center gap-3 p-2.5 rounded-xl bg-muted/5 border border-border/5">
-            <div className="w-8 h-8 rounded-lg bg-[hsl(var(--cyan))]/10 flex items-center justify-center">
-              {device.type === "tank" ? (
-                <div className="relative w-5 h-6 rounded-sm border border-[hsl(var(--cyan))]/40 overflow-hidden">
-                  <div
-                    className="absolute bottom-0 left-0 right-0 bg-[hsl(var(--cyan))]/30 transition-all duration-500"
-                    style={{ height: `${device.value}%` }}
-                  />
-                </div>
-              ) : device.type === "flow" ? (
-                <Waves className="w-4 h-4 text-[hsl(var(--cyan))]" />
+            <div className={cn(
+              "w-9 h-9 rounded-lg flex items-center justify-center",
+              device.active ? "bg-[hsl(var(--cyan))]/10" : "bg-muted/20"
+            )}>
+              {device.type === "flow" ? (
+                <Waves className={cn("w-4 h-4 transition-colors", device.active ? "text-[hsl(var(--cyan))]" : "text-muted-foreground/40")} />
               ) : (
-                <Droplets className="w-4 h-4 text-[hsl(var(--cyan))]" />
+                <Droplets className={cn("w-4 h-4 transition-colors", device.active ? "text-[hsl(var(--cyan))]" : "text-muted-foreground/40")} />
               )}
             </div>
             <div className="flex-1 min-w-0">
-              <span className="text-xs font-medium text-foreground block">{device.name}</span>
+              <div className="flex items-center justify-between">
+                <EditableDeviceName
+                  name={device.name}
+                  onRename={(n) => rename(device.id, n)}
+                />
+                <Switch
+                  checked={device.active}
+                  onCheckedChange={() => toggle(device.id)}
+                  className="scale-75 data-[state=checked]:bg-[hsl(var(--cyan))]"
+                />
+              </div>
               <div className="flex items-center gap-1.5 mt-0.5">
                 <span className={cn(
-                  "text-sm font-bold",
-                  device.type === "tank" && device.value < 40 ? "text-destructive" : "text-[hsl(var(--cyan))]"
+                  "text-sm font-bold tabular-nums",
+                  device.active ? "text-[hsl(var(--cyan))]" : "text-muted-foreground/40"
                 )}>
                   {device.value}
                 </span>
                 <span className="text-[10px] text-muted-foreground">{device.unit}</span>
+                {device.type === "flow" && device.active && device.value > 0 && (
+                  <Gauge className="w-3 h-3 text-[hsl(var(--cyan))]/60 animate-pulse" />
+                )}
               </div>
-              {device.type === "tank" && (
-                <div className="w-full h-1 rounded-full bg-muted/20 mt-1 overflow-hidden">
-                  <div
-                    className={cn(
-                      "h-full rounded-full transition-all duration-500",
-                      device.value < 40 ? "bg-destructive" : "bg-[hsl(var(--cyan))]"
-                    )}
-                    style={{ width: `${device.value}%` }}
-                  />
-                </div>
-              )}
             </div>
-            <Switch
-              checked={device.active}
-              onCheckedChange={() => toggle(device.id)}
-              className="scale-75 data-[state=checked]:bg-[hsl(var(--cyan))]"
-            />
           </div>
         ))}
 

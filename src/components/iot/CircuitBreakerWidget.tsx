@@ -3,6 +3,7 @@ import { CircuitBoard, Power, AlertTriangle, Activity, Zap } from "lucide-react"
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import { ModuleCard } from "./ModuleCard";
+import { EditableDeviceName } from "./EditableDeviceName";
 
 interface Breaker {
   id: string;
@@ -30,6 +31,10 @@ export function CircuitBreakerWidget() {
     ));
   };
 
+  const rename = (id: string, newName: string) => {
+    setBreakers(prev => prev.map(b => b.id === id ? { ...b, name: newName } : b));
+  };
+
   const totalPower = breakers.filter(b => b.on).reduce((s, b) => s + b.powerW, 0);
   const trippedCount = breakers.filter(b => b.tripped).length;
 
@@ -53,12 +58,10 @@ export function CircuitBreakerWidget() {
           return (
             <div key={breaker.id} className={cn(
               "flex items-center gap-3 p-2.5 rounded-xl border transition-all",
-              breaker.tripped
-                ? "bg-destructive/5 border-destructive/20"
-                : "bg-muted/5 border-border/5"
+              breaker.tripped ? "bg-destructive/5 border-destructive/20" : "bg-muted/5 border-border/5"
             )}>
               <div className={cn(
-                "w-8 h-8 rounded-lg flex items-center justify-center",
+                "w-9 h-9 rounded-lg flex items-center justify-center",
                 breaker.tripped ? "bg-destructive/15" : breaker.on ? "bg-[hsl(var(--purple))]/10" : "bg-muted/20"
               )}>
                 {breaker.tripped ? (
@@ -69,28 +72,21 @@ export function CircuitBreakerWidget() {
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-medium text-foreground">{breaker.name}</span>
-                  <Switch
-                    checked={breaker.on}
-                    onCheckedChange={() => toggle(breaker.id)}
-                    className="scale-75 data-[state=checked]:bg-[hsl(var(--purple))]"
+                  <EditableDeviceName
+                    name={breaker.name}
+                    onRename={(n) => rename(breaker.id, n)}
                   />
+                  <Switch checked={breaker.on} onCheckedChange={() => toggle(breaker.id)} className="scale-75 data-[state=checked]:bg-[hsl(var(--purple))]" />
                 </div>
                 <div className="flex items-center gap-3 mt-1">
-                  <span className="text-[10px] text-muted-foreground">{breaker.currentA.toFixed(1)}A / {breaker.ratedA}A</span>
-                  <span className={cn(
-                    "text-[10px] font-medium",
-                    overloaded ? "text-destructive" : "text-muted-foreground"
-                  )}>
+                  <span className="text-[10px] text-muted-foreground tabular-nums">{breaker.currentA.toFixed(1)}A / {breaker.ratedA}A</span>
+                  <span className={cn("text-[10px] font-medium tabular-nums", overloaded ? "text-destructive" : "text-muted-foreground")}>
                     {breaker.powerW > 0 ? `${breaker.powerW}W` : "OFF"}
                   </span>
                 </div>
                 <div className="w-full h-1 rounded-full bg-muted/20 mt-1 overflow-hidden">
                   <div
-                    className={cn(
-                      "h-full rounded-full transition-all duration-500",
-                      overloaded ? "bg-destructive" : "bg-[hsl(var(--purple))]"
-                    )}
+                    className={cn("h-full rounded-full transition-all duration-500", overloaded ? "bg-destructive" : "bg-[hsl(var(--purple))]")}
                     style={{ width: `${Math.min(loadPct, 100)}%` }}
                   />
                 </div>
@@ -102,7 +98,7 @@ export function CircuitBreakerWidget() {
         <div className="grid grid-cols-2 gap-2 pt-1">
           <div className="text-center p-2.5 rounded-xl bg-muted/5 border border-border/5">
             <Zap className="w-4 h-4 text-[hsl(var(--purple))] mx-auto mb-1" />
-            <p className="text-sm font-bold text-foreground">{(totalPower / 1000).toFixed(1)} kW</p>
+            <p className="text-sm font-bold text-foreground tabular-nums">{(totalPower / 1000).toFixed(1)} kW</p>
             <p className="text-[8px] text-muted-foreground uppercase">Total Load</p>
           </div>
           <div className="text-center p-2.5 rounded-xl bg-muted/5 border border-border/5">
