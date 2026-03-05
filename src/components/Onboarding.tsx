@@ -17,7 +17,7 @@ const STEPS: OnboardingStep[] = [
   },
   {
     title: "Connect Your Meter",
-    description: "Link your Tuya 4G smart meter to start. Scan the QR code or enter the device ID manually.",
+    description: "Link your 4G smart meter to start. Scan the QR code or enter the device ID manually.",
     icon: "📱"
   },
   {
