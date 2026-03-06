@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { Zap, Fingerprint, Delete } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Sounds } from "@/lib/sounds";
@@ -19,6 +20,7 @@ const hashPin = async (pin: string): Promise<string> => {
 };
 
 const AppLockScreen = ({ onUnlock, biometricEnabled, onBiometricAuth }: AppLockScreenProps) => {
+  const navigate = useNavigate();
   const [pin, setPin] = useState("");
   const [error, setError] = useState("");
   const [shaking, setShaking] = useState(false);
@@ -156,6 +158,15 @@ const AppLockScreen = ({ onUnlock, biometricEnabled, onBiometricAuth }: AppLockS
           </span>
         </button>
       )}
+
+      {/* Forgot PIN */}
+      <button
+        onClick={() => navigate("/auth/forgot-pin")}
+        className="mt-4 text-sm text-muted-foreground hover:text-primary transition-colors animate-fade-in-up"
+        style={{ animationDelay: "0.3s" }}
+      >
+        Forgot PIN?
+      </button>
     </div>
   );
 };

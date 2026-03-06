@@ -317,6 +317,7 @@ export type Database = {
         }
         Returns: undefined
       }
+      reset_pin: { Args: never; Returns: undefined }
       set_pin: { Args: { p_pin_hash: string }; Returns: undefined }
       upsert_profile: {
         Args: { p_email?: string; p_full_name: string; p_phone?: string }

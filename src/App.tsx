@@ -13,6 +13,7 @@ import SplashScreen from "./pages/SplashScreen";
 import Register from "./pages/auth/Register";
 import Login from "./pages/auth/Login";
 import PinSetup from "./pages/auth/PinSetup";
+import ForgotPin from "./pages/auth/ForgotPin";
 import Home from "./pages/Home";
 import Recharge from "./pages/Recharge";
 import Analytics from "./pages/Analytics";
@@ -61,6 +62,7 @@ const App = () => {
                 <Route path="/auth/register" element={<Register />} />
                 <Route path="/auth/login" element={<Login />} />
                 <Route path="/auth/pin" element={<PinSetup />} />
+                <Route path="/auth/forgot-pin" element={<ForgotPin />} />
 
                 {/* Protected app routes */}
                 <Route path="/" element={<AuthGuard><Home /></AuthGuard>} />
