@@ -20,6 +20,7 @@ const hashPin = async (pin: string): Promise<string> => {
 };
 
 const AppLockScreen = ({ onUnlock, biometricEnabled, onBiometricAuth }: AppLockScreenProps) => {
+  const navigate = useNavigate();
   const [pin, setPin] = useState("");
   const [error, setError] = useState("");
   const [shaking, setShaking] = useState(false);
