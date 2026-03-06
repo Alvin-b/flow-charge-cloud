@@ -158,6 +158,15 @@ const AppLockScreen = ({ onUnlock, biometricEnabled, onBiometricAuth }: AppLockS
           </span>
         </button>
       )}
+
+      {/* Forgot PIN */}
+      <button
+        onClick={() => navigate("/auth/forgot-pin")}
+        className="mt-4 text-sm text-muted-foreground hover:text-primary transition-colors animate-fade-in-up"
+        style={{ animationDelay: "0.3s" }}
+      >
+        Forgot PIN?
+      </button>
     </div>
   );
 };
