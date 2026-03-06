@@ -55,22 +55,35 @@ const AppLockScreen = ({ onUnlock, biometricEnabled, onBiometricAuth }: AppLockS
     setPin(next);
 
     if (next.length === 4) {
-      const hash = await hashPin(next);
-      const { data: isValid } = await supabase.rpc("verify_pin", { p_pin_hash: hash });
-      if (isValid) {
-        Sounds.success();
-        // Dismiss any pending biometric prompt by unmounting immediately
-        onUnlock();
-        return;
-      } else {
+      try {
+        const hash = await hashPin(next);
+        const { data: isValid, error: rpcError } = await supabase.rpc("verify_pin", { p_pin_hash: hash });
+        
+        if (rpcError) {
+          console.error("verify_pin RPC error:", rpcError);
+          Sounds.error();
+          setShaking(true);
+          setError("Verification failed. Try again.");
+          setTimeout(() => { setPin(""); setShaking(false); setError(""); }, 600);
+          return;
+        }
+
+        if (isValid) {
+          Sounds.success();
+          onUnlock();
+          return;
+        } else {
+          Sounds.error();
+          setShaking(true);
+          setError("Wrong PIN. Try again.");
+          setTimeout(() => { setPin(""); setShaking(false); setError(""); }, 600);
+        }
+      } catch (err) {
+        console.error("PIN verification error:", err);
         Sounds.error();
         setShaking(true);
-        setError("Wrong PIN. Try again.");
-        setTimeout(() => {
-          setPin("");
-          setShaking(false);
-          setError("");
-        }, 600);
+        setError("Something went wrong. Try again.");
+        setTimeout(() => { setPin(""); setShaking(false); setError(""); }, 600);
       }
     }
   };
