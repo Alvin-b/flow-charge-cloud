@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { Zap, Fingerprint, Delete } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Sounds } from "@/lib/sounds";
