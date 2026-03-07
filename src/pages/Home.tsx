@@ -1,11 +1,13 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  Bell, Zap, TrendingUp, TrendingDown, ArrowRight, Battery,
+  Bell, Zap, TrendingDown, ArrowRight, Battery,
   CreditCard, ArrowLeftRight, BarChart3, Activity, ChevronRight, Bolt,
   Sparkles, Clock, Shield
 } from "lucide-react";
+import { motion } from "framer-motion";
 import BottomNav from "@/components/BottomNav";
+import HomeSkeleton from "@/components/HomeSkeleton";
 import { useTheme } from "@/components/ThemeProvider";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
@@ -50,15 +52,11 @@ const PulseDot = ({ color = "bg-success" }: { color?: string }) => (
   </span>
 );
 
-const StatChip = ({ icon: Icon, label, value, color }: { icon: React.ElementType; label: string; value: string; color: string }) => (
-  <div className="glass-card rounded-2xl p-3 flex-1 border border-border/10 card-interactive">
-    <div className="flex items-center gap-1.5 mb-1.5">
-      <Icon className={cn("w-3.5 h-3.5", color)} />
-      <span className="text-[9px] text-muted-foreground uppercase tracking-wider">{label}</span>
-    </div>
-    <span className={cn("text-lg font-bold", color)}>{value}</span>
-  </div>
-);
+/* ── Stagger animation helpers ── */
+const stagger = {
+  container: { hidden: {}, show: { transition: { staggerChildren: 0.06, delayChildren: 0.1 } } },
+  item: { hidden: { opacity: 0, y: 16 }, show: { opacity: 1, y: 0, transition: { duration: 0.4, ease: [0.16, 1, 0.3, 1] } } },
+};
 
 const Home = () => {
   const navigate = useNavigate();
@@ -71,9 +69,7 @@ const Home = () => {
   const [dataLoading, setDataLoading] = useState(true);
 
   useEffect(() => {
-    // Wait for auth to be ready before querying RLS-protected tables
     if (authLoading || !user) return;
-
     let mounted = true;
     const fetchData = async () => {
       try {
@@ -136,18 +132,7 @@ const Home = () => {
   const loading = authLoading || dataLoading;
 
   if (loading) {
-    return (
-      <div className="min-h-screen gradient-navy flex flex-col items-center justify-center gap-4">
-        <div className="w-16 h-16 rounded-2xl gradient-cyan flex items-center justify-center glow-cyan animate-float">
-          <Zap className="w-8 h-8 text-[hsl(var(--navy))]" />
-        </div>
-        <div className="flex gap-1.5 mt-2">
-          {[0, 1, 2].map(i => (
-            <div key={i} className="w-1.5 h-1.5 rounded-full bg-primary animate-bounce" style={{ animationDelay: `${i * 0.15}s` }} />
-          ))}
-        </div>
-      </div>
-    );
+    return <HomeSkeleton />;
   }
 
   return (
@@ -156,7 +141,12 @@ const Home = () => {
       <div className="absolute top-0 right-0 w-96 h-96 rounded-full bg-primary/4 blur-[100px] pointer-events-none" />
 
       {/* ── Header ── */}
-      <div className="relative px-5 pt-14 pb-2 flex items-center justify-between animate-fade-in">
+      <motion.div
+        initial={{ opacity: 0, y: -10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
+        className="relative px-5 pt-14 pb-2 flex items-center justify-between"
+      >
         <div className="flex items-center gap-3">
           <div className="w-11 h-11 rounded-2xl gradient-cyan flex items-center justify-center shadow-lg shadow-primary/20">
             <span className="text-sm font-bold text-[hsl(var(--navy))]">
@@ -178,14 +168,26 @@ const Home = () => {
           <button onClick={() => { Sounds.tap(); navigate("/notifications"); }}
             className="relative p-2.5 glass-card rounded-xl border border-border/20 card-interactive">
             <Bell className="w-5 h-5 text-foreground" />
-            {unreadCount > 0 && <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-destructive" />}
+            {unreadCount > 0 && (
+              <motion.span
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-destructive"
+              />
+            )}
           </button>
         </div>
-      </div>
+      </motion.div>
 
-      <div className="relative px-5 space-y-5 mt-2">
+      <motion.div
+        variants={stagger.container}
+        initial="hidden"
+        animate="show"
+        className="relative px-5 space-y-5 mt-2"
+      >
         {/* ── Energy Wallet Card ── */}
-        <div className="relative overflow-hidden rounded-3xl p-6 animate-fade-in-up noise-overlay"
+        <motion.div variants={stagger.item}
+          className="relative overflow-hidden rounded-3xl p-6 noise-overlay"
           style={{
             background: "linear-gradient(145deg, hsl(228, 55%, 12%) 0%, hsl(215, 55%, 15%) 40%, hsl(200, 50%, 14%) 70%, hsl(191, 45%, 13%) 100%)",
             border: "1px solid rgba(0, 212, 255, 0.12)",
@@ -214,12 +216,15 @@ const Home = () => {
                   <p className="text-xs text-muted-foreground/80">≈ KES {(balance * 24).toLocaleString(undefined, { maximumFractionDigits: 0 })}</p>
                 </div>
                 {isLow && (
-                  <button onClick={() => navigate("/recharge")}
+                  <motion.button
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    onClick={() => navigate("/recharge")}
                     className="flex items-center gap-2 bg-destructive/15 rounded-xl px-3 py-2 border border-destructive/20 mb-3 w-full card-interactive">
                     <Activity className="w-3.5 h-3.5 text-destructive animate-pulse" />
                     <span className="text-[11px] text-destructive font-semibold">Low balance — tap to recharge</span>
                     <ArrowRight className="w-3 h-3 text-destructive ml-auto" />
-                  </button>
+                  </motion.button>
                 )}
                 <div className="grid grid-cols-3 gap-2">
                   <div className="bg-white/5 rounded-xl px-2.5 py-2 border border-white/5">
@@ -241,112 +246,155 @@ const Home = () => {
               </div>
             </div>
           </div>
-        </div>
+        </motion.div>
 
         {/* ── Quick Actions ── */}
-        <div className="animate-fade-in-up" style={{ animationDelay: "0.05s" }}>
+        <motion.div variants={stagger.item}>
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-sm font-semibold text-foreground tracking-tight">Quick Actions</h3>
             <Sparkles className="w-4 h-4 text-primary/40" />
           </div>
           <div className="grid grid-cols-4 gap-3">
-            {quickActions.map(({ label, icon: Icon, path, gradient, glow }) => (
-              <button key={label} onClick={() => { Sounds.tap(); navigate(path); }} className="flex flex-col items-center gap-2.5 card-interactive">
-                <div className={cn("w-14 h-14 rounded-2xl flex items-center justify-center shadow-lg", gradient, glow)}>
+            {quickActions.map(({ label, icon: Icon, path, gradient, glow }, i) => (
+              <motion.button
+                key={label}
+                whileTap={{ scale: 0.92 }}
+                onClick={() => { Sounds.tap(); navigate(path); }}
+                className="flex flex-col items-center gap-2.5"
+              >
+                <div className={cn("w-14 h-14 rounded-2xl flex items-center justify-center shadow-lg transition-transform", gradient, glow)}>
                   <Icon className="w-6 h-6 text-[hsl(var(--navy))]" strokeWidth={2} />
                 </div>
                 <span className="text-[11px] font-medium text-foreground">{label}</span>
-              </button>
+              </motion.button>
             ))}
           </div>
-        </div>
+        </motion.div>
 
         {/* ── Meters Section ── */}
-        {meterCount > 0 ? (
-          <div className="glass-card-elevated rounded-2xl p-4 animate-fade-in-up card-interactive" style={{ animationDelay: "0.1s" }}
-            onClick={() => navigate("/meters")}>
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-2">
-                <Clock className="w-3.5 h-3.5 text-muted-foreground" />
-                <span className="text-[10px] text-muted-foreground uppercase tracking-wider">Linked Meters</span>
+        <motion.div variants={stagger.item}>
+          {meterCount > 0 ? (
+            <motion.div
+              whileTap={{ scale: 0.98 }}
+              className="glass-card-elevated rounded-2xl p-4 cursor-pointer"
+              onClick={() => navigate("/meters")}
+            >
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <Clock className="w-3.5 h-3.5 text-muted-foreground" />
+                  <span className="text-[10px] text-muted-foreground uppercase tracking-wider">Linked Meters</span>
+                </div>
+                <span className="flex items-center gap-1.5 text-[10px] rounded-full px-2.5 py-1 font-medium bg-success/15 text-success">
+                  <PulseDot color="bg-success" /> {meterCount} linked
+                </span>
               </div>
-              <span className="flex items-center gap-1.5 text-[10px] rounded-full px-2.5 py-1 font-medium bg-success/15 text-success">
-                <PulseDot color="bg-success" /> {meterCount} linked
-              </span>
-            </div>
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center border border-primary/10">
-                <Zap className="w-6 h-6 text-primary" />
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center border border-primary/10">
+                  <Zap className="w-6 h-6 text-primary" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-bold text-foreground">Manage Meters</p>
+                  <p className="text-xs text-muted-foreground">Transfer kWh from wallet to meter</p>
+                </div>
+                <ChevronRight className="w-5 h-5 text-muted-foreground" />
               </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-bold text-foreground">Manage Meters</p>
-                <p className="text-xs text-muted-foreground">Transfer kWh from wallet to meter</p>
+              <div className="mt-3 pt-3 border-t border-border/10">
+                <div className="flex justify-between items-center mb-1.5">
+                  <span className="text-[10px] text-muted-foreground">Wallet Balance</span>
+                  <span className="text-xs font-bold text-primary">{balance.toFixed(1)} kWh</span>
+                </div>
+                <div className="w-full h-1.5 rounded-full bg-muted/20 overflow-hidden">
+                  <motion.div
+                    initial={{ width: 0 }}
+                    animate={{ width: `${pct}%` }}
+                    transition={{ duration: 1.2, ease: [0.16, 1, 0.3, 1], delay: 0.3 }}
+                    className={cn("h-full rounded-full", pct < 20 ? "bg-destructive" : "gradient-cyan")}
+                  />
+                </div>
               </div>
-              <ChevronRight className="w-5 h-5 text-muted-foreground" />
-            </div>
-            <div className="mt-3 pt-3 border-t border-border/10">
-              <div className="flex justify-between items-center mb-1.5">
-                <span className="text-[10px] text-muted-foreground">Wallet Balance</span>
-                <span className="text-xs font-bold text-primary">{balance.toFixed(1)} kWh</span>
+            </motion.div>
+          ) : (
+            <motion.button
+              whileTap={{ scale: 0.97 }}
+              onClick={() => navigate("/meters")}
+              className="glass-card-elevated rounded-2xl p-6 w-full text-center border-2 border-dashed border-primary/15 hover:border-primary/30 transition-all"
+            >
+              <div className="w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-3">
+                <Zap className="w-7 h-7 text-primary/50" />
               </div>
-              <div className="w-full h-1.5 rounded-full bg-muted/20 overflow-hidden">
-                <div className={cn("h-full rounded-full transition-all duration-1000", pct < 20 ? "bg-destructive" : "gradient-cyan")} style={{ width: `${pct}%` }} />
+              <p className="text-sm font-bold text-foreground">Connect Your First Meter</p>
+              <p className="text-xs text-muted-foreground mt-1.5 max-w-[220px] mx-auto leading-relaxed">
+                Scan the QR code or enter the meter code to start using energy from your wallet
+              </p>
+              <div className="flex items-center justify-center gap-1.5 mt-3 text-primary">
+                <span className="text-xs font-semibold">Get Started</span>
+                <ArrowRight className="w-3.5 h-3.5" />
               </div>
-            </div>
-          </div>
-        ) : (
-          <button onClick={() => navigate("/meters")}
-            className="glass-card-elevated rounded-2xl p-6 w-full text-center animate-fade-in-up border-2 border-dashed border-primary/15 hover:border-primary/30 transition-all card-interactive"
-            style={{ animationDelay: "0.1s" }}>
-            <div className="w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-3">
-              <Zap className="w-7 h-7 text-primary/50" />
-            </div>
-            <p className="text-sm font-bold text-foreground">Connect Your First Meter</p>
-            <p className="text-xs text-muted-foreground mt-1.5 max-w-[220px] mx-auto leading-relaxed">
-              Scan the QR code or enter the meter code to start using energy from your wallet
-            </p>
-            <div className="flex items-center justify-center gap-1.5 mt-3 text-primary">
-              <span className="text-xs font-semibold">Get Started</span>
-              <ArrowRight className="w-3.5 h-3.5" />
-            </div>
-          </button>
-        )}
+            </motion.button>
+          )}
+        </motion.div>
 
         {/* ── Recent Activity ── */}
-        <div className="animate-fade-in-up" style={{ animationDelay: "0.15s" }}>
-          <h3 className="text-sm font-semibold text-foreground tracking-tight mb-3">Recent Activity</h3>
+        <motion.div variants={stagger.item}>
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-semibold text-foreground tracking-tight">Recent Activity</h3>
+            {recentTxs.length > 0 && (
+              <button onClick={() => navigate("/analytics")} className="text-[10px] text-primary font-medium flex items-center gap-0.5">
+                View all <ChevronRight className="w-3 h-3" />
+              </button>
+            )}
+          </div>
           <div className="glass-card rounded-2xl overflow-hidden border border-border/10">
             {recentTxs.length > 0 ? recentTxs.slice(0, 3).map((tx, i) => {
-              const icon = tx.type === "recharge" ? "💳" : tx.type === "transfer_out" ? "📤" : tx.type === "transfer_in" ? "🟢" : "⚡";
+              const iconMap: Record<string, { emoji: string; bg: string }> = {
+                recharge: { emoji: "💳", bg: "bg-primary/10" },
+                transfer_out: { emoji: "📤", bg: "bg-accent/10" },
+                transfer_in: { emoji: "🟢", bg: "bg-success/10" },
+                meter_transfer: { emoji: "⚡", bg: "bg-accent/10" },
+              };
+              const { emoji, bg } = iconMap[tx.type] ?? { emoji: "⚡", bg: "bg-muted/10" };
               const title = tx.type === "recharge" ? "Recharge" : tx.type === "transfer_out" ? "Transfer Sent" : tx.type === "transfer_in" ? "Transfer Received" : "Meter Transfer";
               const desc = tx.type === "recharge"
                 ? `+${tx.amount_kwh} kWh via M-Pesa`
                 : `${tx.amount_kwh} kWh ${tx.type === "transfer_out" ? "sent" : "received"}`;
+              const statusColor = tx.status === "completed" ? "text-success" : tx.status === "pending" ? "text-accent" : "text-destructive";
               return (
-                <div key={tx.id} className={cn("flex items-center gap-3 px-4 py-3.5", i < Math.min(recentTxs.length, 3) - 1 && "border-b border-border/10")}>
-                  <span className="text-lg">{icon}</span>
+                <motion.div
+                  key={tx.id}
+                  initial={{ opacity: 0, x: -8 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: i * 0.05, duration: 0.3 }}
+                  className={cn("flex items-center gap-3 px-4 py-3.5 hover:bg-muted/5 transition-colors", i < Math.min(recentTxs.length, 3) - 1 && "border-b border-border/10")}
+                >
+                  <div className={cn("w-9 h-9 rounded-xl flex items-center justify-center shrink-0", bg)}>
+                    <span className="text-base">{emoji}</span>
+                  </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-foreground">{title}</p>
                     <p className="text-[11px] text-muted-foreground">{desc}</p>
                   </div>
                   <div className="text-right">
-                    <p className={cn("text-[10px] font-medium", tx.status === "completed" ? "text-success" : tx.status === "pending" ? "text-accent" : "text-destructive")}>
+                    <p className={cn("text-[10px] font-semibold capitalize", statusColor)}>
                       {tx.status}
                     </p>
                     <p className="text-[10px] text-muted-foreground">{getTimeAgo(tx.created_at)}</p>
                   </div>
-                </div>
+                </motion.div>
               );
             }) : (
-              <div className="px-4 py-6 text-center">
-                <p className="text-sm text-muted-foreground">No recent activity</p>
+              <div className="px-4 py-8 text-center">
+                <div className="w-12 h-12 rounded-2xl bg-muted/10 flex items-center justify-center mx-auto mb-2">
+                  <Activity className="w-5 h-5 text-muted-foreground/40" />
+                </div>
+                <p className="text-sm font-medium text-muted-foreground">No recent activity</p>
+                <p className="text-[11px] text-muted-foreground/60 mt-0.5">Your transactions will appear here</p>
               </div>
             )}
           </div>
-        </div>
+        </motion.div>
 
         {/* ── Pro Tip ── */}
-        <div className="glass-card rounded-2xl p-4 border border-accent/10 animate-fade-in-up" style={{ animationDelay: "0.2s" }}>
+        <motion.div variants={stagger.item} className="glass-card rounded-2xl p-4 border border-accent/10">
           <div className="flex items-start gap-3">
             <div className="w-10 h-10 rounded-2xl bg-accent/15 flex items-center justify-center shrink-0">
               <Sparkles className="w-5 h-5 text-accent" />
@@ -358,8 +406,8 @@ const Home = () => {
               </p>
             </div>
           </div>
-        </div>
-      </div>
+        </motion.div>
+      </motion.div>
 
       <BottomNav active="/" />
     </div>
