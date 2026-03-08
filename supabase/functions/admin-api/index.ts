@@ -289,17 +289,17 @@ async function updateMeterStatus(sb: any, opts: any) {
 }
 
 async function registerMeter(sb: any, data: any) {
-  const { name, tuya_device_id, property_name } = data;
-  if (!name || !tuya_device_id) throw new Error("Name and device ID required");
+  const { name, tuya_device_id, property_name, mqtt_meter_id } = data;
+  if (!name) throw new Error("Name required");
+  if (!mqtt_meter_id && !tuya_device_id) throw new Error("MQTT Meter ID or Device ID required");
 
-  // Register without a user — admin creates meters in the pool
-  // We need a placeholder user_id; for admin-registered meters use a system UUID
   const { data: meter, error } = await sb.from("meters").insert({
     name,
-    tuya_device_id,
+    tuya_device_id: tuya_device_id || mqtt_meter_id || "pending",
+    mqtt_meter_id: mqtt_meter_id || null,
     property_name: property_name || null,
     status: "available",
-    user_id: "00000000-0000-0000-0000-000000000000", // system placeholder
+    user_id: "00000000-0000-0000-0000-000000000000",
   }).select().single();
   if (error) throw error;
   return { success: true, meter };
