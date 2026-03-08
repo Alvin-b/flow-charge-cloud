@@ -5,7 +5,7 @@
 
 import React, { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import mqttApi, { type MeterReading, type DailyReading, type MqttOperation } from "@/lib/mqtt-client-api";
+import mqttApi, { type MeterReading, type DailyReading } from "@/lib/mqtt-client-api";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -45,7 +45,7 @@ export function MqttMeterDashboard({
 
   const { data: statusInfo } = useQuery({
     queryKey: ["mqtt-status", meterId],
-    queryFn: () => mqttApi.checkMeterStatus(meterId),
+    queryFn: () => mqttApi.checkMeterOnline(meterId),
     refetchInterval: refreshInterval,
   });
 
@@ -87,7 +87,7 @@ export function MqttMeterDashboard({
       export: d.export_total_active || 0,
     }));
 
-  const opsData = (operations?.data || []) as MqttOperation[];
+  const opsData = (operations?.data || []) as Array<{ status: string; operation_type: string; requested_at: string; operation_id: string }>;
   const recentOpsCount = {
     pending: opsData.filter((o) => o.status === "pending").length,
     completed: opsData.filter((o) => o.status === "completed").length,

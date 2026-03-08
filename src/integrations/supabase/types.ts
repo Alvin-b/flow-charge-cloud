@@ -109,11 +109,17 @@ export type Database = {
           command_type: string
           completed_at: string | null
           created_at: string
+          digital_output_number: number | null
+          digital_output_state: string | null
           id: string
           meter_id: string
+          operation_id: string | null
           oprid: string | null
           payload: Json | null
+          responded_at: string | null
           response: Json | null
+          response_code: string | null
+          response_message: string | null
           status: string
           user_id: string
         }
@@ -121,11 +127,17 @@ export type Database = {
           command_type: string
           completed_at?: string | null
           created_at?: string
+          digital_output_number?: number | null
+          digital_output_state?: string | null
           id?: string
           meter_id: string
+          operation_id?: string | null
           oprid?: string | null
           payload?: Json | null
+          responded_at?: string | null
           response?: Json | null
+          response_code?: string | null
+          response_message?: string | null
           status?: string
           user_id: string
         }
@@ -133,11 +145,17 @@ export type Database = {
           command_type?: string
           completed_at?: string | null
           created_at?: string
+          digital_output_number?: number | null
+          digital_output_state?: string | null
           id?: string
           meter_id?: string
+          operation_id?: string | null
           oprid?: string | null
           payload?: Json | null
+          responded_at?: string | null
           response?: Json | null
+          response_code?: string | null
+          response_message?: string | null
           status?: string
           user_id?: string
         }
@@ -362,6 +380,489 @@ export type Database = {
           tuya_device_id?: string
           updated_at?: string
           user_id?: string
+        }
+        Relationships: []
+      }
+      mqtt_daily_readings: {
+        Row: {
+          created_at: string
+          export_tariff1_active: number | null
+          export_tariff2_active: number | null
+          export_tariff3_active: number | null
+          export_tariff4_active: number | null
+          export_total_active: number | null
+          export_total_reactive: number | null
+          id: string
+          import_tariff1_active: number | null
+          import_tariff2_active: number | null
+          import_tariff3_active: number | null
+          import_tariff4_active: number | null
+          import_total_active: number | null
+          import_total_reactive: number | null
+          meter_id: string
+          mqtt_raw_payload: Json | null
+          reading_date: string
+          reading_time: string
+        }
+        Insert: {
+          created_at?: string
+          export_tariff1_active?: number | null
+          export_tariff2_active?: number | null
+          export_tariff3_active?: number | null
+          export_tariff4_active?: number | null
+          export_total_active?: number | null
+          export_total_reactive?: number | null
+          id?: string
+          import_tariff1_active?: number | null
+          import_tariff2_active?: number | null
+          import_tariff3_active?: number | null
+          import_tariff4_active?: number | null
+          import_total_active?: number | null
+          import_total_reactive?: number | null
+          meter_id: string
+          mqtt_raw_payload?: Json | null
+          reading_date: string
+          reading_time?: string
+        }
+        Update: {
+          created_at?: string
+          export_tariff1_active?: number | null
+          export_tariff2_active?: number | null
+          export_tariff3_active?: number | null
+          export_tariff4_active?: number | null
+          export_total_active?: number | null
+          export_total_reactive?: number | null
+          id?: string
+          import_tariff1_active?: number | null
+          import_tariff2_active?: number | null
+          import_tariff3_active?: number | null
+          import_tariff4_active?: number | null
+          import_total_active?: number | null
+          import_total_reactive?: number | null
+          meter_id?: string
+          mqtt_raw_payload?: Json | null
+          reading_date?: string
+          reading_time?: string
+        }
+        Relationships: []
+      }
+      mqtt_energy_readings: {
+        Row: {
+          created_at: string
+          export_tariff1_active: number | null
+          export_tariff2_active: number | null
+          export_tariff3_active: number | null
+          export_tariff4_active: number | null
+          export_tariff5_active: number | null
+          export_tariff6_active: number | null
+          export_total_active: number | null
+          export_total_reactive: number | null
+          ia_3rd_harmonic: number | null
+          ia_5th_harmonic: number | null
+          ia_7th_harmonic: number | null
+          ia_thd: number | null
+          ib_3rd_harmonic: number | null
+          ib_5th_harmonic: number | null
+          ib_7th_harmonic: number | null
+          ib_thd: number | null
+          ic_3rd_harmonic: number | null
+          ic_5th_harmonic: number | null
+          ic_7th_harmonic: number | null
+          ic_thd: number | null
+          id: string
+          import_tariff1_active: number | null
+          import_tariff2_active: number | null
+          import_tariff3_active: number | null
+          import_tariff4_active: number | null
+          import_tariff5_active: number | null
+          import_tariff6_active: number | null
+          import_total_active: number | null
+          import_total_reactive: number | null
+          meter_id: string
+          monthly_max_active_power_demand: number | null
+          monthly_max_active_power_timestamp: string | null
+          monthly_max_apparent_power_demand: number | null
+          monthly_max_apparent_power_timestamp: string | null
+          mqtt_raw_payload: Json | null
+          reading_time: string
+          ua_3rd_harmonic: number | null
+          ua_5th_harmonic: number | null
+          ua_7th_harmonic: number | null
+          ua_thd: number | null
+          ub_3rd_harmonic: number | null
+          ub_5th_harmonic: number | null
+          ub_7th_harmonic: number | null
+          ub_thd: number | null
+          uc_3rd_harmonic: number | null
+          uc_5th_harmonic: number | null
+          uc_7th_harmonic: number | null
+          uc_thd: number | null
+        }
+        Insert: {
+          created_at?: string
+          export_tariff1_active?: number | null
+          export_tariff2_active?: number | null
+          export_tariff3_active?: number | null
+          export_tariff4_active?: number | null
+          export_tariff5_active?: number | null
+          export_tariff6_active?: number | null
+          export_total_active?: number | null
+          export_total_reactive?: number | null
+          ia_3rd_harmonic?: number | null
+          ia_5th_harmonic?: number | null
+          ia_7th_harmonic?: number | null
+          ia_thd?: number | null
+          ib_3rd_harmonic?: number | null
+          ib_5th_harmonic?: number | null
+          ib_7th_harmonic?: number | null
+          ib_thd?: number | null
+          ic_3rd_harmonic?: number | null
+          ic_5th_harmonic?: number | null
+          ic_7th_harmonic?: number | null
+          ic_thd?: number | null
+          id?: string
+          import_tariff1_active?: number | null
+          import_tariff2_active?: number | null
+          import_tariff3_active?: number | null
+          import_tariff4_active?: number | null
+          import_tariff5_active?: number | null
+          import_tariff6_active?: number | null
+          import_total_active?: number | null
+          import_total_reactive?: number | null
+          meter_id: string
+          monthly_max_active_power_demand?: number | null
+          monthly_max_active_power_timestamp?: string | null
+          monthly_max_apparent_power_demand?: number | null
+          monthly_max_apparent_power_timestamp?: string | null
+          mqtt_raw_payload?: Json | null
+          reading_time?: string
+          ua_3rd_harmonic?: number | null
+          ua_5th_harmonic?: number | null
+          ua_7th_harmonic?: number | null
+          ua_thd?: number | null
+          ub_3rd_harmonic?: number | null
+          ub_5th_harmonic?: number | null
+          ub_7th_harmonic?: number | null
+          ub_thd?: number | null
+          uc_3rd_harmonic?: number | null
+          uc_5th_harmonic?: number | null
+          uc_7th_harmonic?: number | null
+          uc_thd?: number | null
+        }
+        Update: {
+          created_at?: string
+          export_tariff1_active?: number | null
+          export_tariff2_active?: number | null
+          export_tariff3_active?: number | null
+          export_tariff4_active?: number | null
+          export_tariff5_active?: number | null
+          export_tariff6_active?: number | null
+          export_total_active?: number | null
+          export_total_reactive?: number | null
+          ia_3rd_harmonic?: number | null
+          ia_5th_harmonic?: number | null
+          ia_7th_harmonic?: number | null
+          ia_thd?: number | null
+          ib_3rd_harmonic?: number | null
+          ib_5th_harmonic?: number | null
+          ib_7th_harmonic?: number | null
+          ib_thd?: number | null
+          ic_3rd_harmonic?: number | null
+          ic_5th_harmonic?: number | null
+          ic_7th_harmonic?: number | null
+          ic_thd?: number | null
+          id?: string
+          import_tariff1_active?: number | null
+          import_tariff2_active?: number | null
+          import_tariff3_active?: number | null
+          import_tariff4_active?: number | null
+          import_tariff5_active?: number | null
+          import_tariff6_active?: number | null
+          import_total_active?: number | null
+          import_total_reactive?: number | null
+          meter_id?: string
+          monthly_max_active_power_demand?: number | null
+          monthly_max_active_power_timestamp?: string | null
+          monthly_max_apparent_power_demand?: number | null
+          monthly_max_apparent_power_timestamp?: string | null
+          mqtt_raw_payload?: Json | null
+          reading_time?: string
+          ua_3rd_harmonic?: number | null
+          ua_5th_harmonic?: number | null
+          ua_7th_harmonic?: number | null
+          ua_thd?: number | null
+          ub_3rd_harmonic?: number | null
+          ub_5th_harmonic?: number | null
+          ub_7th_harmonic?: number | null
+          ub_thd?: number | null
+          uc_3rd_harmonic?: number | null
+          uc_5th_harmonic?: number | null
+          uc_7th_harmonic?: number | null
+          uc_thd?: number | null
+        }
+        Relationships: []
+      }
+      mqtt_meter_readings: {
+        Row: {
+          active_power_demand: number | null
+          apparent_power_demand: number | null
+          created_at: string
+          current_unbalance_rate: number | null
+          f: number | null
+          i_neg_seq: number | null
+          i_pos_seq: number | null
+          i_zero_seq: number | null
+          ia: number | null
+          ia_phase_angle: number | null
+          ib: number | null
+          ib_phase_angle: number | null
+          ic: number | null
+          ic_phase_angle: number | null
+          id: string
+          meter_id: string
+          mqtt_raw_payload: Json | null
+          pa: number | null
+          pb: number | null
+          pc: number | null
+          pfa: number | null
+          pfb: number | null
+          pfc: number | null
+          qa: number | null
+          qb: number | null
+          qc: number | null
+          reactive_power_demand: number | null
+          reading_time: string
+          residual_current: number | null
+          sa: number | null
+          sb: number | null
+          sc: number | null
+          temp_a: number | null
+          temp_b: number | null
+          temp_c: number | null
+          temp_n: number | null
+          u_neg_seq: number | null
+          u_pos_seq: number | null
+          u_zero_seq: number | null
+          ua: number | null
+          ua_phase_angle: number | null
+          uab: number | null
+          ub: number | null
+          ub_phase_angle: number | null
+          ubc: number | null
+          uc: number | null
+          uc_phase_angle: number | null
+          uca: number | null
+          voltage_unbalance_rate: number | null
+          zglys: number | null
+          zszgl: number | null
+          zwggl: number | null
+          zyggl: number | null
+        }
+        Insert: {
+          active_power_demand?: number | null
+          apparent_power_demand?: number | null
+          created_at?: string
+          current_unbalance_rate?: number | null
+          f?: number | null
+          i_neg_seq?: number | null
+          i_pos_seq?: number | null
+          i_zero_seq?: number | null
+          ia?: number | null
+          ia_phase_angle?: number | null
+          ib?: number | null
+          ib_phase_angle?: number | null
+          ic?: number | null
+          ic_phase_angle?: number | null
+          id?: string
+          meter_id: string
+          mqtt_raw_payload?: Json | null
+          pa?: number | null
+          pb?: number | null
+          pc?: number | null
+          pfa?: number | null
+          pfb?: number | null
+          pfc?: number | null
+          qa?: number | null
+          qb?: number | null
+          qc?: number | null
+          reactive_power_demand?: number | null
+          reading_time?: string
+          residual_current?: number | null
+          sa?: number | null
+          sb?: number | null
+          sc?: number | null
+          temp_a?: number | null
+          temp_b?: number | null
+          temp_c?: number | null
+          temp_n?: number | null
+          u_neg_seq?: number | null
+          u_pos_seq?: number | null
+          u_zero_seq?: number | null
+          ua?: number | null
+          ua_phase_angle?: number | null
+          uab?: number | null
+          ub?: number | null
+          ub_phase_angle?: number | null
+          ubc?: number | null
+          uc?: number | null
+          uc_phase_angle?: number | null
+          uca?: number | null
+          voltage_unbalance_rate?: number | null
+          zglys?: number | null
+          zszgl?: number | null
+          zwggl?: number | null
+          zyggl?: number | null
+        }
+        Update: {
+          active_power_demand?: number | null
+          apparent_power_demand?: number | null
+          created_at?: string
+          current_unbalance_rate?: number | null
+          f?: number | null
+          i_neg_seq?: number | null
+          i_pos_seq?: number | null
+          i_zero_seq?: number | null
+          ia?: number | null
+          ia_phase_angle?: number | null
+          ib?: number | null
+          ib_phase_angle?: number | null
+          ic?: number | null
+          ic_phase_angle?: number | null
+          id?: string
+          meter_id?: string
+          mqtt_raw_payload?: Json | null
+          pa?: number | null
+          pb?: number | null
+          pc?: number | null
+          pfa?: number | null
+          pfb?: number | null
+          pfc?: number | null
+          qa?: number | null
+          qb?: number | null
+          qc?: number | null
+          reactive_power_demand?: number | null
+          reading_time?: string
+          residual_current?: number | null
+          sa?: number | null
+          sb?: number | null
+          sc?: number | null
+          temp_a?: number | null
+          temp_b?: number | null
+          temp_c?: number | null
+          temp_n?: number | null
+          u_neg_seq?: number | null
+          u_pos_seq?: number | null
+          u_zero_seq?: number | null
+          ua?: number | null
+          ua_phase_angle?: number | null
+          uab?: number | null
+          ub?: number | null
+          ub_phase_angle?: number | null
+          ubc?: number | null
+          uc?: number | null
+          uc_phase_angle?: number | null
+          uca?: number | null
+          voltage_unbalance_rate?: number | null
+          zglys?: number | null
+          zszgl?: number | null
+          zwggl?: number | null
+          zyggl?: number | null
+        }
+        Relationships: []
+      }
+      mqtt_meter_status: {
+        Row: {
+          created_at: string
+          digital_inputs: string | null
+          digital_outputs: string | null
+          id: string
+          meter_id: string
+          mqtt_raw_payload: Json | null
+          reading_time: string
+        }
+        Insert: {
+          created_at?: string
+          digital_inputs?: string | null
+          digital_outputs?: string | null
+          id?: string
+          meter_id: string
+          mqtt_raw_payload?: Json | null
+          reading_time?: string
+        }
+        Update: {
+          created_at?: string
+          digital_inputs?: string | null
+          digital_outputs?: string | null
+          id?: string
+          meter_id?: string
+          mqtt_raw_payload?: Json | null
+          reading_time?: string
+        }
+        Relationships: []
+      }
+      mqtt_operations: {
+        Row: {
+          command_type: string | null
+          created_at: string
+          data_type: string | null
+          id: string
+          meter_id: string
+          modbus_address: string | null
+          mqtt_raw_payload: Json | null
+          operation_id: string
+          operation_type: string
+          parameter_length: number | null
+          read_value: string | null
+          recall_date: string | null
+          recall_type: string | null
+          requested_at: string
+          requested_value: string | null
+          response_code: string | null
+          response_message: string | null
+          response_received_at: string | null
+          status: string
+        }
+        Insert: {
+          command_type?: string | null
+          created_at?: string
+          data_type?: string | null
+          id?: string
+          meter_id: string
+          modbus_address?: string | null
+          mqtt_raw_payload?: Json | null
+          operation_id: string
+          operation_type: string
+          parameter_length?: number | null
+          read_value?: string | null
+          recall_date?: string | null
+          recall_type?: string | null
+          requested_at?: string
+          requested_value?: string | null
+          response_code?: string | null
+          response_message?: string | null
+          response_received_at?: string | null
+          status?: string
+        }
+        Update: {
+          command_type?: string | null
+          created_at?: string
+          data_type?: string | null
+          id?: string
+          meter_id?: string
+          modbus_address?: string | null
+          mqtt_raw_payload?: Json | null
+          operation_id?: string
+          operation_type?: string
+          parameter_length?: number | null
+          read_value?: string | null
+          recall_date?: string | null
+          recall_type?: string | null
+          requested_at?: string
+          requested_value?: string | null
+          response_code?: string | null
+          response_message?: string | null
+          response_received_at?: string | null
+          status?: string
         }
         Relationships: []
       }

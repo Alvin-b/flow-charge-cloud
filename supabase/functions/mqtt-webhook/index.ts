@@ -3,473 +3,283 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
 /**
- * MQTT Webhook Handler - COMPERE Protocol V1.9
+ * MQTT Webhook Handler — COMPERE Protocol V1.9
  *
- * Receives meter data pushes from MQTT broker via webhook following COMPERE MQTT protocol.
- * Supports:
- * - MQTT_RT_DATA: Real-time second-level data (electrical parameters)
- * - MQTT_ENY_NOW: Minute-level energy data
- * - MQTT_DAY_DATA: Daily frozen data
- * - MQTT_TELEIND: Remote signal data (DI/DO)
- * - MQTT_TELECTRL_REP: Remote control responses
- * - MQTT_RECALL_REP: Data recall responses
- * - MQTT_METER_TIME_REP: Time sync responses
- * - MQTT_SYS_SET_REP: Parameter set responses
- * - MQTT_SYS_REPLY: Parameter read responses
- * - MQTT_RECONFIG_REPLY: MQTT reconfig responses
- * - MQTT_COMMOD_SET_REP: Upload frequency set responses
- * - MQTT_COMMOD_READ_REP: Upload frequency read responses
+ * Receives meter telemetry from EMQX broker webhook rule.
  *
- * Expected webhook payload:
+ * Expected body from EMQX webhook action:
  * {
- *   "topic": "MQTT_RT_DATA",
- *   "payload": "{...}",
- *   "qos": 1,
- *   "timestamp": 1234567890,
- *   "clientid": "device_id"
+ *   "topic": "MQTT_RT_DATA",          // COMPERE topic name
+ *   "payload": "{\"id\":\"...\", ...}",  // JSON string or object
+ *   "clientid": "meter_client_id",
+ *   "timestamp": 1234567890
  * }
  */
 
-interface ComperePayload {
-  id: string;
-  time?: string;
-  isend?: "0" | "1";
-  [key: string]: any;
-}
+// ── Helpers ──────────────────────────────────────────────────
 
-async function parsePayload(payloadStr: unknown): Promise<Record<string, any> | null> {
+function parsePayload(raw: unknown): Record<string, any> | null {
   try {
-    if (typeof payloadStr === "string") {
-      return JSON.parse(payloadStr);
-    }
-    return payloadStr as Record<string, any>;
-  } catch (e) {
-    console.error("Failed to parse payload:", e);
+    if (typeof raw === "string") return JSON.parse(raw);
+    if (raw && typeof raw === "object") return raw as Record<string, any>;
+    return null;
+  } catch {
     return null;
   }
 }
 
-function extractMeterId(payload: ComperePayload): string | null {
-  const meterId = payload.id || payload.code || payload.meter_id;
-  if (meterId && typeof meterId === "string") {
-    return meterId;
-  }
-  return null;
+function extractMeterId(payload: Record<string, any>): string | null {
+  return payload.id || payload.code || null;
 }
 
-function parseCompereTime(timeStr: string): Date | null {
-  if (!timeStr || timeStr.length < 8) return null;
+function parseCompereTime(t: string): Date | null {
+  if (!t || t.length < 8) return null;
   try {
-    const year = parseInt(timeStr.substring(0, 4));
-    const month = parseInt(timeStr.substring(4, 6));
-    const day = parseInt(timeStr.substring(6, 8));
-    const hour = timeStr.length >= 10 ? parseInt(timeStr.substring(8, 10)) : 0;
-    const minute = timeStr.length >= 12 ? parseInt(timeStr.substring(10, 12)) : 0;
-    const second = timeStr.length >= 14 ? parseInt(timeStr.substring(12, 14)) : 0;
-
-    return new Date(Date.UTC(year, month - 1, day, hour, minute, second));
-  } catch (e) {
-    console.error("Failed to parse COMPERE time:", timeStr, e);
+    const y = parseInt(t.substring(0, 4));
+    const m = parseInt(t.substring(4, 6));
+    const d = parseInt(t.substring(6, 8));
+    const H = t.length >= 10 ? parseInt(t.substring(8, 10)) : 0;
+    const M = t.length >= 12 ? parseInt(t.substring(10, 12)) : 0;
+    const S = t.length >= 14 ? parseInt(t.substring(12, 14)) : 0;
+    return new Date(Date.UTC(y, m - 1, d, H, M, S));
+  } catch {
     return null;
   }
 }
 
-async function handleRealTimeSecondLevelData(
-  supabase: ReturnType<typeof createClient>,
-  payload: ComperePayload,
-  meterId: string
-) {
-  const readingTime = payload.time ? parseCompereTime(payload.time) : new Date();
+type SB = ReturnType<typeof createClient>;
 
-  const readingData = {
+// ── MQTT_RT_DATA ─────────────────────────────────────────────
+
+async function handleRtData(sb: SB, p: Record<string, any>, meterId: string) {
+  const readingTime = p.time ? parseCompereTime(p.time) : new Date();
+
+  const { error } = await sb.from("mqtt_meter_readings").insert({
     meter_id: meterId,
-    ua: payload.ua,
-    ub: payload.ub,
-    uc: payload.uc,
-    ia: payload.ia,
-    ib: payload.ib,
-    ic: payload.ic,
-    uab: payload.uab,
-    ubc: payload.ubc,
-    uca: payload.uca,
-    pa: payload.pa,
-    pb: payload.pb,
-    pc: payload.pc,
-    zyggl: payload.zyggl,
-    qa: payload.qa,
-    qb: payload.qb,
-    qc: payload.qc,
-    zwggl: payload.zwggl,
-    sa: payload.sa,
-    sb: payload.sb,
-    sc: payload.sc,
-    zszgl: payload.zszgl,
-    pfa: payload.pfa,
-    pfb: payload.pfb,
-    pfc: payload.pfc,
-    zglys: payload.zglys,
-    f: payload.f,
-    u_zero_seq: payload.U0,
-    u_pos_seq: payload["U+"],
-    u_neg_seq: payload["U-"],
-    i_zero_seq: payload.I0,
-    i_pos_seq: payload["I+"],
-    i_neg_seq: payload["I-"],
-    ua_phase_angle: payload.UXJA,
-    ub_phase_angle: payload.UXJB,
-    uc_phase_angle: payload.UXJC,
-    ia_phase_angle: payload.IXJA,
-    ib_phase_angle: payload.IXJB,
-    ic_phase_angle: payload.IXJC,
-    voltage_unbalance_rate: payload.unb,
-    current_unbalance_rate: payload.inb,
-    active_power_demand: payload.pdm,
-    reactive_power_demand: payload.qdm,
-    apparent_power_demand: payload.sdm,
-    residual_current: payload.ig,
-    temp_a: payload.ta,
-    temp_b: payload.tb,
-    temp_c: payload.tc,
-    temp_n: payload.tn,
+    ua: p.ua, ub: p.ub, uc: p.uc,
+    ia: p.ia, ib: p.ib, ic: p.ic,
+    uab: p.uab, ubc: p.ubc, uca: p.uca,
+    pa: p.pa, pb: p.pb, pc: p.pc,
+    zyggl: p.zyggl,
+    qa: p.qa, qb: p.qb, qc: p.qc,
+    zwggl: p.zwggl,
+    sa: p.sa, sb: p.sb, sc: p.sc,
+    zszgl: p.zszgl,
+    pfa: p.pfa, pfb: p.pfb, pfc: p.pfc,
+    zglys: p.zglys,
+    f: p.f,
+    u_zero_seq: p.U0, u_pos_seq: p["U+"], u_neg_seq: p["U-"],
+    i_zero_seq: p.I0, i_pos_seq: p["I+"], i_neg_seq: p["I-"],
+    ua_phase_angle: p.UXJA, ub_phase_angle: p.UXJB, uc_phase_angle: p.UXJC,
+    ia_phase_angle: p.IXJA, ib_phase_angle: p.IXJB, ic_phase_angle: p.IXJC,
+    voltage_unbalance_rate: p.unb, current_unbalance_rate: p.inb,
+    active_power_demand: p.pdm, reactive_power_demand: p.qdm, apparent_power_demand: p.sdm,
+    residual_current: p.ig,
+    temp_a: p.ta, temp_b: p.tb, temp_c: p.tc, temp_n: p.tn,
     reading_time: readingTime,
-    mqtt_raw_payload: payload,
-  };
+    mqtt_raw_payload: p,
+  });
 
-  const { error } = await supabase
-    .from("mqtt_meter_readings")
-    .insert([readingData]);
+  if (error) console.error("[RT_DATA] Insert error:", error);
+  else console.log(`[RT_DATA] Stored for ${meterId}`);
 
-  if (error) {
-    console.error("Failed to insert meter reading:", error);
-  } else {
-    console.log(`[MQTT_RT_DATA] Stored reading for meter ${meterId}`);
-  }
-
-  await supabase
-    .from("meters")
-    .update({ status: "connected", updated_at: new Date().toISOString() })
-    .eq("id", meterId);
+  // Also update meter_readings (legacy) and meter status
+  await sb.from("meter_readings").insert({
+    meter_id: meterId,
+    voltage: p.ua,
+    current_amps: p.ia,
+    power_watts: p.zyggl ? p.zyggl * 1000 : null,
+    energy_kwh: null,
+    frequency_hz: p.f,
+    power_factor: p.zglys ?? p.pfa,
+    raw_payload: p,
+  });
 }
 
-async function handleEnergyNowData(
-  supabase: ReturnType<typeof createClient>,
-  payload: ComperePayload,
-  meterId: string
-) {
-  const readingTime = payload.time ? parseCompereTime(payload.time) : new Date();
+// ── MQTT_ENY_NOW ─────────────────────────────────────────────
 
-  const energyData = {
+async function handleEnyNow(sb: SB, p: Record<string, any>, meterId: string) {
+  const readingTime = p.time ? parseCompereTime(p.time) : new Date();
+
+  const { error } = await sb.from("mqtt_energy_readings").insert({
     meter_id: meterId,
-    import_total_active: payload.zygsz,
-    export_total_active: payload.fygsz,
-    import_total_reactive: payload.zwgsz,
-    export_total_reactive: payload.fwgsz,
-    import_tariff1_active: payload.zyjsz,
-    export_tariff1_active: payload.fyjsz,
-    import_tariff2_active: payload.zyfsz,
-    export_tariff2_active: payload.fyfsz,
-    import_tariff3_active: payload.zypsz,
-    export_tariff3_active: payload.fypsz,
-    import_tariff4_active: payload.zyvsz,
-    export_tariff4_active: payload.fyvsz,
-    import_tariff5_active: payload.zydvsz,
-    export_tariff5_active: payload.fydvsz,
-    import_tariff6_active: payload.zy6sz,
-    export_tariff6_active: payload.fy6sz,
-    monthly_max_active_power_demand: payload.dmpmax,
-    monthly_max_active_power_timestamp: payload.dmpmaxoct
-      ? new Date(payload.dmpmaxoct * 1000)
-      : null,
-    monthly_max_apparent_power_demand: payload.dmsmax,
-    monthly_max_apparent_power_timestamp: payload.dmsmaxoct
-      ? new Date(payload.dmsmaxoct * 1000)
-      : null,
-    ua_thd: payload.uathd,
-    ub_thd: payload.ubthd,
-    uc_thd: payload.ucthd,
-    ia_thd: payload.iathd,
-    ib_thd: payload.ibthd,
-    ic_thd: payload.icthd,
-    ua_3rd_harmonic: payload.uaxbl3,
-    ub_3rd_harmonic: payload.ubxbl3,
-    uc_3rd_harmonic: payload.ucxbl3,
-    ia_3rd_harmonic: payload.iaxbl3,
-    ib_3rd_harmonic: payload.ibxbl3,
-    ic_3rd_harmonic: payload.icxbl3,
-    ua_5th_harmonic: payload.uaxbl5,
-    ub_5th_harmonic: payload.ubxbl5,
-    uc_5th_harmonic: payload.ucxbl5,
-    ia_5th_harmonic: payload.iaxbl5,
-    ib_5th_harmonic: payload.ibxbl5,
-    ic_5th_harmonic: payload.icxbl5,
-    ua_7th_harmonic: payload.uaxbl7,
-    ub_7th_harmonic: payload.ubxbl7,
-    uc_7th_harmonic: payload.ucxbl7,
-    ia_7th_harmonic: payload.iaxbl7,
-    ib_7th_harmonic: payload.ibxbl7,
-    ic_7th_harmonic: payload.icxbl7,
+    import_total_active: p.zygsz, export_total_active: p.fygsz,
+    import_total_reactive: p.zwgsz, export_total_reactive: p.fwgsz,
+    import_tariff1_active: p.zyjsz, export_tariff1_active: p.fyjsz,
+    import_tariff2_active: p.zyfsz, export_tariff2_active: p.fyfsz,
+    import_tariff3_active: p.zypsz, export_tariff3_active: p.fypsz,
+    import_tariff4_active: p.zyvsz, export_tariff4_active: p.fyvsz,
+    import_tariff5_active: p.zydvsz, export_tariff5_active: p.fydvsz,
+    import_tariff6_active: p.zy6sz, export_tariff6_active: p.fy6sz,
+    monthly_max_active_power_demand: p.dmpmax,
+    monthly_max_active_power_timestamp: p.dmpmaxoct ? new Date(p.dmpmaxoct * 1000) : null,
+    monthly_max_apparent_power_demand: p.dmsmax,
+    monthly_max_apparent_power_timestamp: p.dmsmaxoct ? new Date(p.dmsmaxoct * 1000) : null,
+    ua_thd: p.uathd, ub_thd: p.ubthd, uc_thd: p.ucthd,
+    ia_thd: p.iathd, ib_thd: p.ibthd, ic_thd: p.icthd,
+    ua_3rd_harmonic: p.uaxbl3, ub_3rd_harmonic: p.ubxbl3, uc_3rd_harmonic: p.ucxbl3,
+    ia_3rd_harmonic: p.iaxbl3, ib_3rd_harmonic: p.ibxbl3, ic_3rd_harmonic: p.icxbl3,
+    ua_5th_harmonic: p.uaxbl5, ub_5th_harmonic: p.ubxbl5, uc_5th_harmonic: p.ucxbl5,
+    ia_5th_harmonic: p.iaxbl5, ib_5th_harmonic: p.ibxbl5, ic_5th_harmonic: p.icxbl5,
+    ua_7th_harmonic: p.uaxbl7, ub_7th_harmonic: p.ubxbl7, uc_7th_harmonic: p.ucxbl7,
+    ia_7th_harmonic: p.iaxbl7, ib_7th_harmonic: p.ibxbl7, ic_7th_harmonic: p.icxbl7,
     reading_time: readingTime,
-    mqtt_raw_payload: payload,
-  };
+    mqtt_raw_payload: p,
+  });
 
-  const { error } = await supabase
-    .from("mqtt_energy_readings")
-    .insert([energyData]);
-
-  if (error) {
-    console.error("Failed to insert energy reading:", error);
-  } else {
-    console.log(`[MQTT_ENY_NOW] Stored energy reading for meter ${meterId}`);
-  }
+  if (error) console.error("[ENY_NOW] Insert error:", error);
+  else console.log(`[ENY_NOW] Stored for ${meterId}`);
 }
 
-async function handleDailyData(
-  supabase: ReturnType<typeof createClient>,
-  payload: ComperePayload,
-  meterId: string
-) {
-  const readingTime = payload.time ? parseCompereTime(payload.time) : new Date();
-  const readingDate = new Date(readingTime);
-  readingDate.setHours(0, 0, 0, 0);
+// ── MQTT_DAY_DATA ────────────────────────────────────────────
 
-  const dailyData = {
+async function handleDayData(sb: SB, p: Record<string, any>, meterId: string) {
+  const readingTime = p.time ? parseCompereTime(p.time) : new Date();
+  const readingDate = readingTime ? readingTime.toISOString().split("T")[0] : new Date().toISOString().split("T")[0];
+
+  const { error } = await sb.from("mqtt_daily_readings").upsert({
     meter_id: meterId,
-    import_total_active: payload.zygdd,
-    export_total_active: payload.fygdd,
-    import_total_reactive: payload.zwgdd,
-    export_total_reactive: payload.fwgdd,
-    import_tariff1_active: payload.zyjsz,
-    export_tariff1_active: payload.fyjsz,
-    import_tariff2_active: payload.zyfsz,
-    export_tariff2_active: payload.fyfsz,
-    import_tariff3_active: payload.zypsz,
-    export_tariff3_active: payload.fypsz,
-    import_tariff4_active: payload.zyvsz,
-    export_tariff4_active: payload.fyvsz,
-    reading_date: readingDate.toISOString().split("T")[0],
+    import_total_active: p.zygdd, export_total_active: p.fygdd,
+    import_total_reactive: p.zwgdd, export_total_reactive: p.fwgdd,
+    import_tariff1_active: p.zyjsz, export_tariff1_active: p.fyjsz,
+    import_tariff2_active: p.zyfsz, export_tariff2_active: p.fyfsz,
+    import_tariff3_active: p.zypsz, export_tariff3_active: p.fypsz,
+    import_tariff4_active: p.zyvsz, export_tariff4_active: p.fyvsz,
+    reading_date: readingDate,
     reading_time: readingTime,
-    mqtt_raw_payload: payload,
-  };
+    mqtt_raw_payload: p,
+  }, { onConflict: "meter_id,reading_date" });
 
-  const { error } = await supabase
-    .from("mqtt_daily_readings")
-    .insert([dailyData])
-    .on("duplicate", "UPDATE");
-
-  if (error) {
-    console.error("Failed to insert daily reading:", error);
-  } else {
-    console.log(`[MQTT_DAY_DATA] Stored daily reading for meter ${meterId}`);
-  }
+  if (error) console.error("[DAY_DATA] Upsert error:", error);
+  else console.log(`[DAY_DATA] Stored for ${meterId} date=${readingDate}`);
 }
 
-async function handleRemoteSignalData(
-  supabase: ReturnType<typeof createClient>,
-  payload: ComperePayload,
-  meterId: string
-) {
-  const readingTime = payload.time ? parseCompereTime(payload.time) : new Date();
-  const [diValue, doValue] = (payload.value || "@").split("@");
+// ── MQTT_TELEIND ─────────────────────────────────────────────
 
-  const statusData = {
+async function handleTeleind(sb: SB, p: Record<string, any>, meterId: string) {
+  const readingTime = p.time ? parseCompereTime(p.time) : new Date();
+  const [diValue, doValue] = (p.value || "@").split("@");
+
+  const { error } = await sb.from("mqtt_meter_status").insert({
     meter_id: meterId,
     digital_inputs: diValue,
     digital_outputs: doValue,
     reading_time: readingTime,
-    mqtt_raw_payload: payload,
+    mqtt_raw_payload: p,
+  });
+
+  if (error) console.error("[TELEIND] Insert error:", error);
+  else console.log(`[TELEIND] DI/DO for ${meterId}: ${diValue}/${doValue}`);
+}
+
+// ── Command/Operation responses ──────────────────────────────
+
+async function handleCommandResponse(sb: SB, p: Record<string, any>, meterId: string, topic: string) {
+  const oprid = p.oprid;
+  const success = p.code === "01";
+  const now = new Date().toISOString();
+
+  // Update meter_commands table (relay control responses)
+  if (topic === "MQTT_TELECTRL_REP") {
+    const { error } = await sb.from("meter_commands")
+      .update({
+        status: success ? "completed" : "failed",
+        response: p,
+        response_code: p.code,
+        response_message: p.msg || null,
+        responded_at: now,
+        completed_at: now,
+      })
+      .eq("oprid", oprid);
+
+    if (error) console.error(`[${topic}] Update error:`, error);
+    else console.log(`[${topic}] Command ${oprid}: ${success ? "OK" : "FAIL"}`);
+    return;
+  }
+
+  // All other responses go to mqtt_operations
+  const updateData: Record<string, any> = {
+    status: success ? "completed" : "failed",
+    response_code: p.code,
+    response_message: p.msg || null,
+    response_received_at: now,
+    mqtt_raw_payload: p,
   };
 
-  const { error } = await supabase
-    .from("mqtt_meter_status")
-    .insert([statusData]);
-
-  if (error) {
-    console.error("Failed to insert meter status:", error);
-  } else {
-    console.log(`[MQTT_TELEIND] Stored remote signal for meter ${meterId}`);
+  // MQTT_SYS_REPLY includes read values
+  if (topic === "MQTT_SYS_REPLY") {
+    updateData.modbus_address = p.addr;
+    updateData.read_value = p.value;
   }
+
+  // MQTT_COMMOD_READ_REP includes frequency values
+  if (topic === "MQTT_COMMOD_READ_REP") {
+    updateData.command_type = p.Cmd;
+    updateData.read_value = p.value;
+  }
+
+  const { error } = await sb.from("mqtt_operations")
+    .update(updateData)
+    .eq("operation_id", oprid);
+
+  if (error) console.error(`[${topic}] Update error:`, error);
+  else console.log(`[${topic}] Op ${oprid}: ${success ? "OK" : "FAIL"}`);
 }
 
-async function handleRemoteControlResponse(
-  supabase: ReturnType<typeof createClient>,
-  payload: Record<string, any>,
-  meterId: string
-) {
-  const operationId = payload.oprid;
-  const responseCode = payload.code;
+// ── MQTT_RECALL_REP ──────────────────────────────────────────
 
-  const { error } = await supabase
-    .from("mqtt_commands")
+async function handleRecallResponse(sb: SB, p: Record<string, any>, meterId: string) {
+  const oprid = p.oprid;
+  const success = p.code === "01";
+
+  const { error } = await sb.from("mqtt_operations")
     .update({
-      status: responseCode === "01" ? "acknowledged" : "failed",
-      response_code: responseCode,
-      response_message: payload.msg,
-      responded_at: new Date().toISOString(),
-    })
-    .eq("operation_id", operationId)
-    .eq("meter_id", meterId);
-
-  if (error) {
-    console.error("Failed to update command response:", error);
-  } else {
-    console.log(
-      `[MQTT_TELECTRL_REP] Updated command ${operationId}: ${
-        responseCode === "01" ? "success" : "failed"
-      }`
-    );
-  }
-}
-
-async function handleTimeSyncResponse(
-  supabase: ReturnType<typeof createClient>,
-  payload: Record<string, any>,
-  meterId: string
-) {
-  const operationId = payload.oprid;
-  const responseCode = payload.code;
-
-  const { error } = await supabase
-    .from("mqtt_operations")
-    .update({
-      status: responseCode === "01" ? "completed" : "failed",
-      response_code: responseCode,
-      response_message: payload.msg,
+      status: success ? "completed" : "failed",
+      response_code: p.code,
+      response_message: p.msg || null,
       response_received_at: new Date().toISOString(),
+      mqtt_raw_payload: p,
     })
-    .eq("operation_id", operationId)
-    .eq("meter_id", meterId);
+    .eq("operation_id", oprid);
 
-  if (error) {
-    console.error("Failed to update time sync response:", error);
-  } else {
-    console.log(`[MQTT_METER_TIME_REP] Time sync ${operationId}: ${payload.code}`);
+  if (!error) console.log(`[RECALL_REP] ${oprid}: ${success ? "OK" : "FAIL"}`);
+
+  // If successful, also store the recalled data as a daily reading
+  if (success && p.time) {
+    const readingDate = p.time.substring(0, 4) + "-" + p.time.substring(4, 6) + "-01";
+    await sb.from("mqtt_daily_readings").upsert({
+      meter_id: meterId,
+      import_total_active: p.zygdd, export_total_active: p.fygdd,
+      import_total_reactive: p.zwgdd, export_total_reactive: p.fwgdd,
+      import_tariff1_active: p.zyjdd, export_tariff1_active: p.fyjdd,
+      import_tariff2_active: p.zyfdd, export_tariff2_active: p.fyfdd,
+      import_tariff3_active: p.zypdd, export_tariff3_active: p.fypdd,
+      import_tariff4_active: p.zyvdd, export_tariff4_active: p.fyvdd,
+      reading_date: readingDate,
+      reading_time: new Date(),
+      mqtt_raw_payload: p,
+    }, { onConflict: "meter_id,reading_date" });
   }
 }
 
-async function handleParameterSetResponse(
-  supabase: ReturnType<typeof createClient>,
-  payload: Record<string, any>,
-  meterId: string
-) {
-  const operationId = payload.oprid;
+// ── Response topics map ──────────────────────────────────────
 
-  const { error } = await supabase
-    .from("mqtt_operations")
-    .update({
-      status: payload.code === "01" ? "completed" : "failed",
-      response_code: payload.code,
-      response_received_at: new Date().toISOString(),
-    })
-    .eq("operation_id", operationId)
-    .eq("meter_id", meterId);
+const RESPONSE_TOPICS = new Set([
+  "MQTT_TELECTRL_REP",
+  "MQTT_METER_TIME_REP",
+  "MQTT_SYS_SET_REP",
+  "MQTT_SYS_REPLY",
+  "MQTT_RECONFIG_REPLY",
+  "MQTT_COMMOD_SET_REP",
+  "MQTT_COMMOD_READ_REP",
+]);
 
-  if (error) {
-    console.error("Failed to update parameter set response:", error);
-  } else {
-    console.log(`[MQTT_SYS_SET_REP] Parameter set ${operationId}: ${payload.code}`);
-  }
-}
-
-async function handleParameterReadResponse(
-  supabase: ReturnType<typeof createClient>,
-  payload: Record<string, any>,
-  meterId: string
-) {
-  const operationId = payload.oprid;
-
-  const { error } = await supabase
-    .from("mqtt_operations")
-    .update({
-      modbus_address: payload.addr,
-      read_value: payload.value,
-      status: payload.code === "01" ? "completed" : "failed",
-      response_code: payload.code,
-      response_received_at: new Date().toISOString(),
-    })
-    .eq("operation_id", operationId)
-    .eq("meter_id", meterId);
-
-  if (error) {
-    console.error("Failed to update parameter read response:", error);
-  } else {
-    console.log(`[MQTT_SYS_REPLY] Parameter read ${operationId}: ${payload.value}`);
-  }
-}
-
-async function handleReconfigResponse(
-  supabase: ReturnType<typeof createClient>,
-  payload: Record<string, any>,
-  meterId: string
-) {
-  const operationId = payload.oprid;
-
-  const { error } = await supabase
-    .from("mqtt_operations")
-    .update({
-      status: payload.code === "01" ? "completed" : "failed",
-      response_code: payload.code,
-      response_message: payload.msg,
-      response_received_at: new Date().toISOString(),
-    })
-    .eq("operation_id", operationId)
-    .eq("meter_id", meterId);
-
-  if (error) {
-    console.error("Failed to update reconfig response:", error);
-  } else {
-    console.log(`[MQTT_RECONFIG_REPLY] Reconfig ${operationId}: ${payload.code}`);
-  }
-}
-
-async function handleUploadFrequencySetResponse(
-  supabase: ReturnType<typeof createClient>,
-  payload: Record<string, any>,
-  meterId: string
-) {
-  const operationId = payload.oprid;
-
-  const { error } = await supabase
-    .from("mqtt_operations")
-    .update({
-      status: payload.code === "01" ? "completed" : "failed",
-      response_code: payload.code,
-      response_received_at: new Date().toISOString(),
-    })
-    .eq("operation_id", operationId)
-    .eq("meter_id", meterId);
-
-  if (error) {
-    console.error("Failed to update upload frequency set response:", error);
-  }
-}
-
-async function handleUploadFrequencyReadResponse(
-  supabase: ReturnType<typeof createClient>,
-  payload: Record<string, any>,
-  meterId: string
-) {
-  const operationId = payload.oprid;
-
-  const { error } = await supabase
-    .from("mqtt_operations")
-    .update({
-      command_type: payload.Cmd,
-      read_value: payload.value,
-      status: payload.code === "01" ? "completed" : "failed",
-      response_code: payload.code,
-      response_received_at: new Date().toISOString(),
-    })
-    .eq("operation_id", operationId)
-    .eq("meter_id", meterId);
-
-  if (error) {
-    console.error("Failed to update upload frequency read response:", error);
-  }
-}
+// ── Main handler ─────────────────────────────────────────────
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -479,121 +289,83 @@ serve(async (req) => {
   try {
     // Validate webhook secret
     const webhookSecret = Deno.env.get("MQTT_WEBHOOK_SECRET");
-    const providedSecret = req.headers.get("X-Webhook-Secret") || 
+    const provided = req.headers.get("X-Webhook-Secret") ||
       req.headers.get("Authorization")?.replace("Bearer ", "");
-    if (!webhookSecret || providedSecret !== webhookSecret) {
-      console.error("[MQTT Webhook] Unauthorized: missing or invalid secret");
+
+    if (!webhookSecret || provided !== webhookSecret) {
+      console.error("[Webhook] Unauthorized");
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    const supabase = createClient(
+    const sb = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
     const body = await req.json();
-    const { topic, payload: payloadStr, timestamp } = body;
+    const { topic, payload: payloadRaw } = body;
 
-    if (!topic || payloadStr === undefined) {
-      return new Response(
-        JSON.stringify({ error: "Missing topic or payload" }),
-        {
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
+    if (!topic || payloadRaw === undefined) {
+      return new Response(JSON.stringify({ error: "Missing topic or payload" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
-    const payload = await parsePayload(payloadStr);
-    if (!payload || typeof payload !== "object") {
-      return new Response(
-        JSON.stringify({ error: "Invalid payload format" }),
-        {
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
+    const payload = parsePayload(payloadRaw);
+    if (!payload) {
+      return new Response(JSON.stringify({ error: "Invalid payload" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
-    console.log(`[MQTT Webhook] Topic: ${topic}, Payload:`, JSON.stringify(payload).substring(0, 200));
+    console.log(`[Webhook] ${topic}:`, JSON.stringify(payload).substring(0, 200));
 
     const meterId = extractMeterId(payload);
     if (!meterId) {
-      return new Response(
-        JSON.stringify({ error: "Could not extract meter ID from payload" }),
-        {
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
-    }
-
-    // Route based on COMPERE topic names
-    if (topic === "MQTT_RT_DATA") {
-      if (payload.isend === "1") {
-        await handleRealTimeSecondLevelData(supabase, payload, meterId);
-      }
-    } else if (topic === "MQTT_ENY_NOW") {
-      if (payload.isend === "1") {
-        await handleEnergyNowData(supabase, payload, meterId);
-      }
-    } else if (topic === "MQTT_DAY_DATA") {
-      if (payload.isend === "1") {
-        await handleDailyData(supabase, payload, meterId);
-      }
-    } else if (topic === "MQTT_TELEIND") {
-      await handleRemoteSignalData(supabase, payload, meterId);
-    } else if (topic === "MQTT_TELECTRL_REP") {
-      await handleRemoteControlResponse(supabase, payload, meterId);
-    } else if (topic === "MQTT_METER_TIME_REP") {
-      await handleTimeSyncResponse(supabase, payload, meterId);
-    } else if (topic === "MQTT_SYS_SET_REP") {
-      await handleParameterSetResponse(supabase, payload, meterId);
-    } else if (topic === "MQTT_SYS_REPLY") {
-      await handleParameterReadResponse(supabase, payload, meterId);
-    } else if (topic === "MQTT_RECONFIG_REPLY") {
-      await handleReconfigResponse(supabase, payload, meterId);
-    } else if (topic === "MQTT_COMMOD_SET_REP") {
-      await handleUploadFrequencySetResponse(supabase, payload, meterId);
-    } else if (topic === "MQTT_COMMOD_READ_REP") {
-      await handleUploadFrequencyReadResponse(supabase, payload, meterId);
-    } else if (topic === "MQTT_RECALL_REP") {
-      const operationId = payload.oprid;
-      const { error } = await supabase
-        .from("mqtt_operations")
-        .update({
-          status: payload.code === "01" ? "completed" : "failed",
-          response_code: payload.code,
-          response_message: payload.msg,
-          response_received_at: new Date().toISOString(),
-          mqtt_raw_payload: payload,
-        })
-        .eq("operation_id", operationId);
-
-      if (!error) {
-        console.log(`[MQTT_RECALL_REP] Data recall ${operationId}: ${payload.code}`);
-      }
-    } else {
-      console.warn(`[MQTT Webhook] Unknown topic: ${topic}`);
-    }
-
-    return new Response(
-      JSON.stringify({
-        success: true,
-        message: "COMPERE MQTT message processed",
-      }),
-      {
-        status: 200,
+      return new Response(JSON.stringify({ error: "No meter ID in payload" }), {
+        status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
-    );
+      });
+    }
+
+    // Route by COMPERE topic
+    switch (topic) {
+      case "MQTT_RT_DATA":
+        if (payload.isend !== "0") await handleRtData(sb, payload, meterId);
+        break;
+      case "MQTT_ENY_NOW":
+        if (payload.isend !== "0") await handleEnyNow(sb, payload, meterId);
+        break;
+      case "MQTT_DAY_DATA":
+        if (payload.isend !== "0") await handleDayData(sb, payload, meterId);
+        break;
+      case "MQTT_TELEIND":
+        await handleTeleind(sb, payload, meterId);
+        break;
+      case "MQTT_RECALL_REP":
+        await handleRecallResponse(sb, payload, meterId);
+        break;
+      default:
+        if (RESPONSE_TOPICS.has(topic)) {
+          await handleCommandResponse(sb, payload, meterId, topic);
+        } else {
+          console.warn(`[Webhook] Unknown topic: ${topic}`);
+        }
+        break;
+    }
+
+    return new Response(JSON.stringify({ success: true }), {
+      status: 200,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   } catch (err) {
-    console.error("MQTT webhook error:", err);
-    const msg = err instanceof Error ? err.message : "Server error";
-    return new Response(JSON.stringify({ error: msg }), {
+    console.error("[Webhook] Error:", err);
+    return new Response(JSON.stringify({ error: err instanceof Error ? err.message : "Server error" }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
