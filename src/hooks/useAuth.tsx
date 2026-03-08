@@ -39,14 +39,26 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const fetchProfile = async (userId: string) => {
     // Fetch profile from safe view (excludes pin_hash)
-    const { data } = await (supabase
-      .from("profiles_safe" as any)
-      // include the is_admin flag in case it's present
-      .select("user_id, full_name, phone, email, avatar_url, is_admin")
-      .eq("user_id", userId)
-      .maybeSingle()) as { data: { user_id: string; full_name: string; phone: string; email: string | null; avatar_url: string | null; is_admin?: boolean } | null };
+    const [profileResult, roleResult] = await Promise.all([
+      (supabase
+        .from("profiles_safe" as any)
+        .select("user_id, full_name, phone, email, avatar_url, is_admin")
+        .eq("user_id", userId)
+        .maybeSingle() as unknown as Promise<{ data: { user_id: string; full_name: string; phone: string; email: string | null; avatar_url: string | null; is_admin?: boolean } | null }>),
+      supabase
+        .from("user_roles" as any)
+        .select("role")
+        .eq("user_id", userId)
+        .eq("role", "admin")
+        .maybeSingle(),
+    ]);
+
+    const data = profileResult.data;
 
     if (data) {
+      // Set is_admin from user_roles table (preferred) or legacy profiles flag
+      const hasAdminRole = !!roleResult.data;
+      data.is_admin = hasAdminRole || !!data.is_admin;
       // If profile exists but full_name is missing, try to fill it from Supabase Auth user_metadata
       if (!data.full_name) {
         const { data: { user: authUser } } = await supabase.auth.getUser();
