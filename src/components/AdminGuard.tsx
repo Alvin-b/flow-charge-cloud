@@ -23,8 +23,7 @@ export default function AdminGuard({ children }: AdminGuardProps) {
   }
 
   if (!user) {
-    // not logged in at all
-    return <Navigate to="/auth/login" replace />;
+    return <Navigate to="/admin/login" replace />;
   }
 
   if (!profile?.is_admin) {

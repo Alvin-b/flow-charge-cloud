@@ -155,7 +155,7 @@ export default function AdminMeters() {
             <DialogFooter>
               <Button variant="outline" onClick={() => setRegisterOpen(false)}>Cancel</Button>
               <Button onClick={() => {
-                if (!newMeter.name || !newMeter.tuya_device_id) return toast.error("Name and Device ID required");
+                if (!newMeter.name || !newMeter.mqtt_meter_id) return toast.error("Name and MQTT Meter ID required");
                 registerMutation.mutate(newMeter);
               }} disabled={registerMutation.isPending}>
                 {registerMutation.isPending ? "Registering..." : "Register Meter"}
