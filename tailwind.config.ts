@@ -55,7 +55,6 @@ export default {
           border: "hsl(var(--sidebar-border))",
           ring: "hsl(var(--sidebar-ring))",
         },
-        // PowerFlow brand colors
         navy: {
           DEFAULT: "hsl(var(--navy))",
           mid: "hsl(var(--navy-mid))",
@@ -93,7 +92,7 @@ export default {
           to: { transform: "rotate(360deg)" },
         },
         "fade-in-up": {
-          from: { opacity: "0", transform: "translateY(20px)" },
+          from: { opacity: "0", transform: "translateY(12px)" },
           to: { opacity: "1", transform: "translateY(0)" },
         },
         "fade-in": {
@@ -101,7 +100,7 @@ export default {
           to: { opacity: "1" },
         },
         "scale-in": {
-          from: { opacity: "0", transform: "scale(0.95)" },
+          from: { opacity: "0", transform: "scale(0.96)" },
           to: { opacity: "1", transform: "scale(1)" },
         },
         "slide-up": {
@@ -109,13 +108,13 @@ export default {
           to: { transform: "translateY(0)" },
         },
         "pulse-ring": {
-          "0%": { transform: "scale(0.95)", boxShadow: "0 0 0 0 rgba(0, 212, 255, 0.4)" },
-          "70%": { transform: "scale(1)", boxShadow: "0 0 0 15px rgba(0, 212, 255, 0)" },
-          "100%": { transform: "scale(0.95)", boxShadow: "0 0 0 0 rgba(0, 212, 255, 0)" },
+          "0%": { transform: "scale(0.95)", boxShadow: "0 0 0 0 hsl(168 75% 42% / 0.3)" },
+          "70%": { transform: "scale(1)", boxShadow: "0 0 0 12px hsl(168 75% 42% / 0)" },
+          "100%": { transform: "scale(0.95)", boxShadow: "0 0 0 0 hsl(168 75% 42% / 0)" },
         },
         float: {
           "0%, 100%": { transform: "translateY(0px)" },
-          "50%": { transform: "translateY(-8px)" },
+          "50%": { transform: "translateY(-6px)" },
         },
         shimmer: {
           "0%": { backgroundPosition: "-200% 0" },
@@ -131,8 +130,8 @@ export default {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
         "spin-slow": "spin-slow 3s linear infinite",
-        "fade-in-up": "fade-in-up 0.5s ease-out",
-        "fade-in": "fade-in 0.4s ease-out",
+        "fade-in-up": "fade-in-up 0.4s ease-out",
+        "fade-in": "fade-in 0.3s ease-out",
         "scale-in": "scale-in 0.3s ease-out",
         "slide-up": "slide-up 0.4s cubic-bezier(0.16, 1, 0.3, 1)",
         "pulse-ring": "pulse-ring 2s cubic-bezier(0.455, 0.03, 0.515, 0.955) infinite",
@@ -141,9 +140,9 @@ export default {
         shake: "shake 0.5s ease-in-out",
       },
       backgroundImage: {
-        "gradient-wallet": "linear-gradient(135deg, hsl(228, 50%, 12%), hsl(210, 60%, 18%), hsl(191, 60%, 16%))",
-        "gradient-cyan": "linear-gradient(135deg, hsl(191, 100%, 45%), hsl(210, 100%, 60%))",
-        "gradient-navy": "linear-gradient(135deg, hsl(228, 65%, 5%), hsl(228, 50%, 12%))",
+        "gradient-wallet": "linear-gradient(135deg, hsl(168, 75%, 42%), hsl(185, 60%, 45%), hsl(200, 55%, 48%))",
+        "gradient-cyan": "linear-gradient(135deg, hsl(168, 75%, 42%), hsl(168, 65%, 50%))",
+        "gradient-navy": "linear-gradient(135deg, hsl(220, 18%, 8%), hsl(220, 16%, 12%))",
       },
     },
   },
