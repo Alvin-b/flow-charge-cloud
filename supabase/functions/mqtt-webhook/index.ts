@@ -34,7 +34,21 @@ function parsePayload(raw: unknown): Record<string, any> | null {
 }
 
 function extractMeterId(payload: Record<string, any>): string | null {
-  return payload.id || payload.code || null;
+  // COMPERE uses MN (Meter Number), also check id/code for compatibility
+  return payload.MN || payload.id || payload.code || null;
+}
+
+/** Get a value from payload trying both original and lowercase keys */
+function pv(payload: Record<string, any>, ...keys: string[]): any {
+  for (const k of keys) {
+    if (payload[k] !== undefined) return payload[k];
+    const lower = k.toLowerCase();
+    if (payload[lower] !== undefined) return payload[lower];
+    // Try uppercase first letter
+    const upper = k.charAt(0).toUpperCase() + k.slice(1);
+    if (payload[upper] !== undefined) return payload[upper];
+  }
+  return undefined;
 }
 
 function parseCompereTime(t: string): Date | null {
