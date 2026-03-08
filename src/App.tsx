@@ -76,10 +76,10 @@ const App = () => {
                 <Route path="/notifications" element={<AuthGuard><Notifications /></AuthGuard>} />
                 <Route path="/install" element={<Install />} />
 
-                {/* Admin routes protected by `AdminGuard`. these pages are only
-                    reachable by accounts whose `profiles.is_admin` flag is true.
-                    the guard bypasses the PIN/unlock flow so administrators don't
-                    have to set a wallet PIN just to access the dashboard. */}
+                {/* Admin auth */}
+                <Route path="/admin/login" element={<AdminLogin />} />
+
+                {/* Admin routes */}
                 <Route path="/admin/dashboard" element={<AdminGuard><AdminDashboard /></AdminGuard>} />
                 <Route path="/admin/users" element={<AdminGuard><AdminUsers /></AdminGuard>} />
                 <Route path="/admin/meters" element={<AdminGuard><AdminMeters /></AdminGuard>} />
