@@ -45,7 +45,7 @@ export function MqttMeterDashboard({
 
   const { data: statusInfo } = useQuery({
     queryKey: ["mqtt-status", meterId],
-    queryFn: () => mqttApi.checkMeterStatus(meterId),
+    queryFn: () => mqttApi.checkMeterOnline(meterId),
     refetchInterval: refreshInterval,
   });
 
