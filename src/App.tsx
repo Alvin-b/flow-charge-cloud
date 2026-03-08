@@ -31,6 +31,7 @@ import AdminSettings from "./pages/admin/AdminSettings";
 import AdminPlaceholder from "./pages/admin/AdminPlaceholder";
 import AdminLogin from "./pages/admin/AdminLogin";
 import AdminGuard from "./components/AdminGuard";
+import AdminWallets from "./pages/admin/AdminWallets";
 import IoTHub from "./pages/IoTHub";
 
 const queryClient = new QueryClient();
