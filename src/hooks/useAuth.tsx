@@ -54,7 +54,33 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       supabase.rpc("has_pin"),
     ]);
 
-    const data = profileResult.data;
+    let data = profileResult.data;
+
+    if (!data) {
+      // Profile doesn't exist yet — auto-create from auth metadata
+      // This happens when a user signs up, confirms email, and logs in
+      // but the profile RPC during signup failed (user wasn't confirmed yet)
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      const metaName = authUser?.user_metadata?.full_name || "";
+      const metaEmail = authUser?.email || "";
+      const metaPhone = authUser?.user_metadata?.phone || "";
+
+      if (authUser) {
+        await supabase.rpc("upsert_profile", {
+          p_full_name: metaName,
+          p_phone: metaPhone || null,
+          p_email: metaEmail || null,
+        });
+
+        // Re-fetch the newly created profile
+        const refetch = await (supabase
+          .from("profiles_safe" as any)
+          .select("user_id, full_name, phone, email, avatar_url, is_admin")
+          .eq("user_id", userId)
+          .maybeSingle() as unknown as Promise<{ data: typeof data }>);
+        data = refetch.data;
+      }
+    }
 
     if (data) {
       const hasAdminRole = !!roleResult.data;
