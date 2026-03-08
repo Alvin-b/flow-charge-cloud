@@ -110,6 +110,8 @@ Deno.serve(async (req) => {
         return json(await sendBroadcast(supabaseAdmin, body));
       case "activity_log":
         return json(await activityLog(supabaseAdmin, body));
+      case "list_wallets":
+        return json(await listWallets(supabaseAdmin, body));
       default:
         return json({ error: `Unknown action: ${action}` }, 400);
     }
@@ -428,4 +430,60 @@ async function activityLog(sb: any, opts: any) {
     .range(offset, offset + limit - 1);
 
   return { activities: data || [], total: count ?? 0 };
+}
+
+// ─── Wallets ─────────────────────────────────────────────
+
+async function listWallets(sb: any, opts: any) {
+  const { page = 1, limit = 50, search = "" } = opts;
+  const offset = (page - 1) * limit;
+
+  // Get all wallets with count
+  const { data: wallets, count } = await sb.from("wallets")
+    .select("*", { count: "exact" })
+    .order("updated_at", { ascending: false })
+    .range(offset, offset + limit - 1);
+
+  // Get profile names for wallet owners
+  const userIds = (wallets || []).map((w: any) => w.user_id);
+  const { data: profiles } = userIds.length > 0
+    ? await sb.from("profiles").select("user_id, full_name, phone, email").in("user_id", userIds)
+    : { data: [] };
+
+  const profileMap: Record<string, any> = {};
+  (profiles || []).forEach((p: any) => { profileMap[p.user_id] = p; });
+
+  // Get aggregate stats
+  const { data: allWallets } = await sb.from("wallets").select("balance_kwh");
+  const totalBalance = (allWallets || []).reduce((s: number, w: any) => s + (w.balance_kwh || 0), 0);
+  const activeCount = (allWallets || []).filter((w: any) => w.balance_kwh > 0).length;
+  const zeroCount = (allWallets || []).filter((w: any) => w.balance_kwh <= 0).length;
+
+  // Filter by search if provided (search by owner name/phone/email)
+  let enriched = (wallets || []).map((w: any) => ({
+    ...w,
+    owner_name: profileMap[w.user_id]?.full_name || null,
+    owner_phone: profileMap[w.user_id]?.phone || null,
+    owner_email: profileMap[w.user_id]?.email || null,
+  }));
+
+  if (search) {
+    const q = search.toLowerCase();
+    enriched = enriched.filter((w: any) =>
+      (w.owner_name || "").toLowerCase().includes(q) ||
+      (w.owner_phone || "").toLowerCase().includes(q) ||
+      (w.owner_email || "").toLowerCase().includes(q)
+    );
+  }
+
+  return {
+    wallets: enriched,
+    total: count ?? 0,
+    stats: {
+      total_balance: totalBalance,
+      total_wallets: (allWallets || []).length,
+      active_wallets: activeCount,
+      zero_wallets: zeroCount,
+    },
+  };
 }

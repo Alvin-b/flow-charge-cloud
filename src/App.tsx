@@ -31,6 +31,7 @@ import AdminSettings from "./pages/admin/AdminSettings";
 import AdminPlaceholder from "./pages/admin/AdminPlaceholder";
 import AdminLogin from "./pages/admin/AdminLogin";
 import AdminGuard from "./components/AdminGuard";
+import AdminWallets from "./pages/admin/AdminWallets";
 import IoTHub from "./pages/IoTHub";
 
 const queryClient = new QueryClient();
@@ -90,7 +91,7 @@ const App = () => {
                 <Route path="/admin/settings" element={<AdminGuard><AdminSettings /></AdminGuard>} />
                 <Route path="/admin/analytics" element={<AdminGuard><AdminPlaceholder title="Analytics" description="Revenue charts, usage trends, and system metrics" /></AdminGuard>} />
                 <Route path="/admin/activity" element={<AdminGuard><AdminPlaceholder title="Activity Log" description="Audit trail of admin and system actions" /></AdminGuard>} />
-                <Route path="/admin/wallets" element={<AdminGuard><AdminPlaceholder title="Wallets" description="View and manage all user wallets" /></AdminGuard>} />
+                <Route path="/admin/wallets" element={<AdminGuard><AdminWallets /></AdminGuard>} />
                 <Route path="/admin/meter-commands" element={<AdminGuard><AdminPlaceholder title="Meter Commands" description="MQTT command history and remote control" /></AdminGuard>} />
                 <Route path="/admin/kplc" element={<AdminGuard><AdminPlaceholder title="KPLC Payments" description="B2B payment pool status and history" /></AdminGuard>} />
                 <Route path="/admin/notifications" element={<AdminGuard><AdminPlaceholder title="Notifications" description="Send broadcast notifications to users" /></AdminGuard>} />

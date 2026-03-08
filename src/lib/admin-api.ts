@@ -68,6 +68,10 @@ export const adminApi = {
   sendBroadcast: (title: string, body: string, type = "system") =>
     callAdmin("send_broadcast", { title, body, type }),
 
+  // Wallets
+  listWallets: (page = 1, limit = 50, search = "") =>
+    callAdmin("list_wallets", { page, limit, search }),
+
   // Activity Log
   getActivityLog: (page = 1, limit = 50) =>
     callAdmin("activity_log", { page, limit }),
