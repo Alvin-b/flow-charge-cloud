@@ -497,3 +497,194 @@ async function listWallets(sb: any, opts: any) {
     },
   };
 }
+
+// ─── Meter Commands ──────────────────────────────────────
+
+async function listMeterCommands(sb: any, opts: any) {
+  const { page = 1, limit = 50, search = "" } = opts;
+  const offset = (page - 1) * limit;
+
+  let query = sb.from("meter_commands").select("*", { count: "exact" });
+  if (search) {
+    query = query.or(`command_type.ilike.%${search}%,status.ilike.%${search}%`);
+  }
+
+  const { data, count } = await query
+    .order("created_at", { ascending: false })
+    .range(offset, offset + limit - 1);
+
+  // Get meter names
+  const meterIds = [...new Set((data || []).map((c: any) => c.meter_id).filter(Boolean))];
+  const { data: meters } = meterIds.length > 0
+    ? await sb.from("meters").select("id, name, mqtt_meter_id").in("id", meterIds)
+    : { data: [] };
+
+  const meterMap: Record<string, any> = {};
+  (meters || []).forEach((m: any) => { meterMap[m.id] = m; });
+
+  const commands = (data || []).map((c: any) => ({
+    ...c,
+    meter_name: meterMap[c.meter_id]?.name || null,
+    mqtt_meter_id: meterMap[c.meter_id]?.mqtt_meter_id || null,
+  }));
+
+  return { commands, total: count ?? 0 };
+}
+
+// ─── KPLC Payments ───────────────────────────────────────
+
+async function listKplcPayments(sb: any, opts: any) {
+  const { page = 1, limit = 50 } = opts;
+  const offset = (page - 1) * limit;
+
+  const { data, count } = await sb.from("kplc_payments")
+    .select("*", { count: "exact" })
+    .order("created_at", { ascending: false })
+    .range(offset, offset + limit - 1);
+
+  return { payments: data || [], total: count ?? 0 };
+}
+
+async function kplcPoolStatus(sb: any) {
+  // Unforwarded pool
+  const { data: poolRows } = await sb.from("payment_splits")
+    .select("kplc_amount_kes, commission_amount_kes")
+    .eq("forwarded", false);
+
+  const poolBalance = (poolRows || []).reduce((s: number, r: any) => s + (r.kplc_amount_kes || 0), 0);
+  const pendingCommission = (poolRows || []).reduce((s: number, r: any) => s + (r.commission_amount_kes || 0), 0);
+
+  // Total forwarded
+  const { data: fwdRows } = await sb.from("payment_splits")
+    .select("kplc_amount_kes, commission_amount_kes")
+    .eq("forwarded", true);
+
+  const totalForwarded = (fwdRows || []).reduce((s: number, r: any) => s + (r.kplc_amount_kes || 0), 0);
+  const totalCommission = (fwdRows || []).reduce((s: number, r: any) => s + (r.commission_amount_kes || 0), 0)
+    + pendingCommission;
+
+  // Settings
+  const { data: settings } = await sb.from("system_settings")
+    .select("key, value")
+    .in("key", ["kplc_min_payment", "commission_percent", "kplc_paybill", "kplc_account_number"]);
+
+  const settingsMap: Record<string, string> = {};
+  (settings || []).forEach((s: any) => { settingsMap[s.key] = s.value; });
+
+  // Recent KPLC payments
+  const { data: recentPayments } = await sb.from("kplc_payments")
+    .select("*")
+    .order("created_at", { ascending: false })
+    .limit(5);
+
+  return {
+    pool_balance_kes: poolBalance,
+    pending_splits: (poolRows || []).length,
+    total_forwarded_kes: totalForwarded,
+    total_commission_kes: totalCommission,
+    min_payment: parseFloat(settingsMap.kplc_min_payment || "25"),
+    commission_percent: parseFloat(settingsMap.commission_percent || "10"),
+    kplc_paybill: settingsMap.kplc_paybill || "888880",
+    kplc_account: settingsMap.kplc_account_number || "",
+    recent_payments: recentPayments || [],
+  };
+}
+
+// ─── Analytics Overview ──────────────────────────────────
+
+async function analyticsOverview(sb: any, opts: any) {
+  const { period = "30d" } = opts;
+  const days = period === "7d" ? 7 : period === "90d" ? 90 : 30;
+  const since = new Date(Date.now() - days * 86400000).toISOString();
+
+  // Transactions in period
+  const { data: txns } = await sb.from("transactions")
+    .select("amount_kes, amount_kwh, type, status, created_at")
+    .gte("created_at", since);
+
+  const completed = (txns || []).filter((t: any) => t.status === "completed");
+  const recharges = completed.filter((t: any) => t.type === "recharge");
+  const transfers = completed.filter((t: any) => t.type === "transfer_out");
+
+  // Daily breakdown
+  const dailyMap: Record<string, { revenue: number; kwh: number; count: number }> = {};
+  recharges.forEach((t: any) => {
+    const day = t.created_at.slice(0, 10);
+    if (!dailyMap[day]) dailyMap[day] = { revenue: 0, kwh: 0, count: 0 };
+    dailyMap[day].revenue += t.amount_kes || 0;
+    dailyMap[day].kwh += t.amount_kwh || 0;
+    dailyMap[day].count++;
+  });
+
+  const dailyData = Object.entries(dailyMap)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([date, d]) => ({ date, ...d }));
+
+  // New users in period
+  const { count: newUsers } = await sb.from("profiles")
+    .select("*", { count: "exact", head: true })
+    .gte("created_at", since);
+
+  return {
+    period: days,
+    total_revenue_kes: recharges.reduce((s: number, t: any) => s + (t.amount_kes || 0), 0),
+    total_kwh_sold: recharges.reduce((s: number, t: any) => s + (t.amount_kwh || 0), 0),
+    total_recharges: recharges.length,
+    total_transfers: transfers.length,
+    total_transactions: (txns || []).length,
+    failed_transactions: (txns || []).filter((t: any) => t.status === "failed").length,
+    new_users: newUsers ?? 0,
+    daily: dailyData,
+  };
+}
+
+// ─── Rate Limits / Security ──────────────────────────────
+
+async function listRateLimits(sb: any, opts: any) {
+  const { page = 1, limit = 50 } = opts;
+  const offset = (page - 1) * limit;
+
+  const { data, count } = await sb.from("rate_limit_events")
+    .select("*", { count: "exact" })
+    .order("created_at", { ascending: false })
+    .range(offset, offset + limit - 1);
+
+  // Get user names
+  const userIds = [...new Set((data || []).map((e: any) => e.user_id).filter(Boolean))];
+  const { data: profiles } = userIds.length > 0
+    ? await sb.from("profiles").select("user_id, full_name, phone").in("user_id", userIds)
+    : { data: [] };
+
+  const nameMap: Record<string, any> = {};
+  (profiles || []).forEach((p: any) => { nameMap[p.user_id] = p; });
+
+  const events = (data || []).map((e: any) => ({
+    ...e,
+    user_name: nameMap[e.user_id]?.full_name || null,
+    user_phone: nameMap[e.user_id]?.phone || null,
+  }));
+
+  // Count by action
+  const { data: allEvents } = await sb.from("rate_limit_events")
+    .select("action")
+    .gte("created_at", new Date(Date.now() - 3600000).toISOString());
+
+  const actionCounts: Record<string, number> = {};
+  (allEvents || []).forEach((e: any) => {
+    actionCounts[e.action] = (actionCounts[e.action] || 0) + 1;
+  });
+
+  // User roles summary
+  const { data: roles } = await sb.from("user_roles").select("role");
+  const roleCounts: Record<string, number> = {};
+  (roles || []).forEach((r: any) => {
+    roleCounts[r.role] = (roleCounts[r.role] || 0) + 1;
+  });
+
+  return {
+    events,
+    total: count ?? 0,
+    hourly_action_counts: actionCounts,
+    role_counts: roleCounts,
+  };
+}
