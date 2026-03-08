@@ -28,10 +28,15 @@ import AdminUsers from "./pages/admin/AdminUsers";
 import AdminMeters from "./pages/admin/AdminMeters";
 import AdminTransactions from "./pages/admin/AdminTransactions";
 import AdminSettings from "./pages/admin/AdminSettings";
-import AdminPlaceholder from "./pages/admin/AdminPlaceholder";
 import AdminLogin from "./pages/admin/AdminLogin";
 import AdminGuard from "./components/AdminGuard";
 import AdminWallets from "./pages/admin/AdminWallets";
+import AdminAnalytics from "./pages/admin/AdminAnalytics";
+import AdminActivityLog from "./pages/admin/AdminActivityLog";
+import AdminMeterCommands from "./pages/admin/AdminMeterCommands";
+import AdminKPLC from "./pages/admin/AdminKPLC";
+import AdminNotificationsManager from "./pages/admin/AdminNotificationsManager";
+import AdminSecurity from "./pages/admin/AdminSecurity";
 import IoTHub from "./pages/IoTHub";
 
 const queryClient = new QueryClient();
