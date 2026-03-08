@@ -172,12 +172,21 @@ const Profile = () => {
         <div className="glass-card-elevated rounded-3xl p-6 animate-fade-in-up">
           <div className="flex items-center gap-4">
             <div className="relative">
-              <div className="w-20 h-20 rounded-3xl bg-primary flex items-center justify-center text-2xl font-bold text-primary-foreground shadow-md">
-                {initials}
-              </div>
-              <button onClick={openEditProfile} className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-primary flex items-center justify-center border-2 border-background shadow-md">
-                <Edit3 className="w-3 h-3 text-primary-foreground" />
-              </button>
+              {avatarUrl ? (
+                <img src={avatarUrl} alt="Avatar" className="w-20 h-20 rounded-3xl object-cover shadow-md" />
+              ) : (
+                <div className="w-20 h-20 rounded-3xl bg-primary flex items-center justify-center text-2xl font-bold text-primary-foreground shadow-md">
+                  {initials}
+                </div>
+              )}
+              <label className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-primary flex items-center justify-center border-2 border-background shadow-md cursor-pointer">
+                {avatarUploading ? (
+                  <Loader2 className="w-3 h-3 text-primary-foreground animate-spin" />
+                ) : (
+                  <Edit3 className="w-3 h-3 text-primary-foreground" />
+                )}
+                <input type="file" accept="image/*" className="hidden" onChange={handleAvatarUpload} disabled={avatarUploading} />
+              </label>
               <div className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-success border-2 border-background" />
             </div>
             <div className="flex-1">
