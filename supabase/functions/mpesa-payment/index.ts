@@ -308,13 +308,42 @@ async function handleCallback(supabase: any, body: any) {
       const { data: reconnResult } = await supabase.rpc("auto_reconnect_on_recharge", {
         p_user_id: transaction.user_id,
       });
-      if (reconnResult?.reconnected) {
+      if (reconnResult?.reconnected && reconnResult?.mqtt_meter_id) {
+        // Send MQTT relay ON command
+        const mqttApiUrl = Deno.env.get("MQTT_HTTP_API_URL");
+        const mqttApiKey = Deno.env.get("MQTT_HTTP_API_KEY");
+        if (mqttApiUrl) {
+          const mqttMeterId = reconnResult.mqtt_meter_id;
+          const oprid = crypto.randomUUID().replace(/-/g, "");
+          const topic = `MQTT_TELECTRL_${mqttMeterId.slice(-8)}`;
+          const mqttHeaders: Record<string, string> = { "Content-Type": "application/json" };
+          if (mqttApiKey) mqttHeaders["Authorization"] = `Basic ${mqttApiKey}`;
+          
+          fetch(mqttApiUrl, {
+            method: "POST",
+            headers: mqttHeaders,
+            body: JSON.stringify({
+              topic,
+              payload: JSON.stringify({ do1: "1", oprid }),
+              qos: 1,
+              retain: false,
+            }),
+          }).then(async (res) => {
+            if (res.ok) {
+              console.log(`⚡ Relay ON sent to ${topic} for user ${transaction.user_id}`);
+            } else {
+              const text = await res.text();
+              console.error(`⚡ Relay ON failed [${res.status}]: ${text}`);
+            }
+          }).catch((e) => console.error("MQTT relay restore error:", e));
+        }
+
         console.log(`⚡ Auto-reconnected user ${transaction.user_id} to meter ${reconnResult.meter_code}`);
         await supabase.rpc("insert_notification", {
           p_user_id: transaction.user_id,
           p_type: "meter",
-          p_title: "Meter Reconnected",
-          p_body: `Automatically reconnected to ${reconnResult.meter_name || "meter"} (${reconnResult.meter_code}) after recharge.`,
+          p_title: "Power Restored ⚡",
+          p_body: `Automatically reconnected to ${reconnResult.meter_name || "meter"} after recharge. Balance: ${transaction.amount_kwh} kWh added.`,
           p_icon: "⚡",
         });
       }
