@@ -70,6 +70,7 @@ const App = () => {
                 <Route path="/auth/register" element={<Register />} />
                 <Route path="/auth/login" element={<Login />} />
                 <Route path="/auth/pin" element={<PinSetup />} />
+                <Route path="/auth/confirm-email" element={<EmailConfirmWait />} />
                 <Route path="/auth/forgot-pin" element={<ForgotPin />} />
 
                 {/* Protected app routes */}
