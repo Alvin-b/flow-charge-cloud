@@ -63,11 +63,44 @@ const Profile = () => {
     }
   }, []);
 
+  useEffect(() => {
+    if (profile?.avatar_url) setAvatarUrl(profile.avatar_url);
+  }, [profile?.avatar_url]);
+
   const openEditProfile = () => {
     setEditName(profile?.full_name || "");
     setEditPhone(profile?.phone || "");
     setEditEmail(profile?.email || "");
     setEditOpen(true);
+  };
+
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !user) return;
+    if (file.size > 2 * 1024 * 1024) {
+      toast({ title: "File too large", description: "Max 2MB", variant: "destructive" });
+      return;
+    }
+    setAvatarUploading(true);
+    try {
+      const ext = file.name.split(".").pop() || "jpg";
+      const path = `${user.id}/avatar.${ext}`;
+      const { error: uploadErr } = await supabase.storage.from("avatars").upload(path, file, { upsert: true });
+      if (uploadErr) throw uploadErr;
+      const { data: urlData } = supabase.storage.from("avatars").getPublicUrl(path);
+      const publicUrl = urlData.publicUrl + "?t=" + Date.now();
+      // Update profile
+      await supabase.from("profiles").update({ avatar_url: publicUrl }).eq("user_id", user.id);
+      setAvatarUrl(publicUrl);
+      await refreshProfile();
+      Sounds.success();
+      toast({ title: "Photo updated!" });
+    } catch (err: any) {
+      Sounds.error();
+      toast({ title: "Upload failed", description: err.message, variant: "destructive" });
+    } finally {
+      setAvatarUploading(false);
+    }
   };
 
   const saveProfile = async () => {

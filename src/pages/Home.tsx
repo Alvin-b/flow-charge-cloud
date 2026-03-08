@@ -4,14 +4,17 @@ import { useTheme, ColorTheme } from "@/components/ThemeProvider";
 import HomeCyberpunk from "@/components/home/HomeCyberpunk";
 import HomeOcean from "@/components/home/HomeOcean";
 import HomeMinimal from "@/components/home/HomeMinimal";
+import HomeSunset from "@/components/home/HomeSunset";
+import HomeForest from "@/components/home/HomeForest";
+import HomeLavender from "@/components/home/HomeLavender";
 
 const themeLayoutMap: Record<ColorTheme, React.ComponentType<{ data: any }>> = {
   cyberpunk: HomeCyberpunk,
   ocean: HomeOcean,
-  sunset: HomeCyberpunk,   // TODO: phase 2
-  forest: HomeOcean,       // TODO: phase 2
+  sunset: HomeSunset,
+  forest: HomeForest,
   minimal: HomeMinimal,
-  lavender: HomeOcean,     // TODO: phase 2
+  lavender: HomeLavender,
 };
 
 const Home = () => {
