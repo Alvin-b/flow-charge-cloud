@@ -476,6 +476,27 @@ export type Database = {
         }
         Relationships: []
       }
+      rate_limit_events: {
+        Row: {
+          action: string
+          created_at: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          action: string
+          created_at?: string
+          id?: string
+          user_id: string
+        }
+        Update: {
+          action?: string
+          created_at?: string
+          id?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       system_settings: {
         Row: {
           description: string | null
@@ -648,6 +669,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      cleanup_rate_limit_events: { Args: never; Returns: undefined }
       credit_wallet: {
         Args: {
           p_amount_kwh: number
