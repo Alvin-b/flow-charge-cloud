@@ -2,12 +2,12 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   ChevronRight, Moon, Sun, Fingerprint, Shield, Bell, HelpCircle, LogOut,
-  Zap, User, Mail, Phone, Edit3, Crown, ExternalLink, X, Check, Loader2, Cpu
+  Zap, User, Mail, Phone, Edit3, Crown, ExternalLink, X, Check, Loader2, Cpu, Palette
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import BottomNav from "@/components/BottomNav";
-import { useTheme } from "@/components/ThemeProvider";
+import { useTheme, COLOR_THEMES } from "@/components/ThemeProvider";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
@@ -18,7 +18,7 @@ import { IoTSettingsPanel } from "@/components/iot/IoTSettingsPanel";
 
 const Profile = () => {
   const navigate = useNavigate();
-  const { theme, toggleTheme } = useTheme();
+  const { mode, toggleMode, colorTheme, setColorTheme } = useTheme();
   const { profile, signOut, refreshProfile } = useAuth();
   const { toast } = useToast();
   const [biometric, setBiometric] = useState(() => localStorage.getItem("powerflow-biometric-enabled") === "true");
@@ -233,13 +233,50 @@ const Profile = () => {
         <Section title="Appearance">
           <div className="flex items-center gap-3 px-4 py-3.5 border-b border-border">
             <div className="w-9 h-9 rounded-xl bg-primary/8 flex items-center justify-center">
-              {theme === "dark" ? <Moon className="w-4 h-4 text-primary" /> : <Sun className="w-4 h-4 text-accent" />}
+              {mode === "dark" ? <Moon className="w-4 h-4 text-primary" /> : <Sun className="w-4 h-4 text-accent" />}
             </div>
             <div className="flex-1">
-              <span className="text-sm font-medium text-foreground block">{theme === "dark" ? "Dark Mode" : "Light Mode"}</span>
-              <span className="text-[10px] text-muted-foreground">Switch app theme</span>
+              <span className="text-sm font-medium text-foreground block">{mode === "dark" ? "Dark Mode" : "Light Mode"}</span>
+              <span className="text-[10px] text-muted-foreground">Switch light / dark</span>
             </div>
-            <Switch checked={theme === "dark"} onCheckedChange={toggleTheme} className="data-[state=checked]:bg-primary" />
+            <Switch checked={mode === "dark"} onCheckedChange={toggleMode} className="data-[state=checked]:bg-primary" />
+          </div>
+          <div className="px-4 py-3.5">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-9 h-9 rounded-xl bg-primary/8 flex items-center justify-center">
+                <Palette className="w-4 h-4 text-primary" />
+              </div>
+              <div>
+                <span className="text-sm font-medium text-foreground block">Color Theme</span>
+                <span className="text-[10px] text-muted-foreground">Choose your vibe</span>
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              {COLOR_THEMES.map((t) => (
+                <button
+                  key={t.id}
+                  onClick={() => { setColorTheme(t.id); Sounds.tap(); }}
+                  className={cn(
+                    "relative flex flex-col items-center gap-1.5 p-3 rounded-xl border-2 transition-all",
+                    colorTheme === t.id
+                      ? "border-primary bg-primary/10 shadow-md"
+                      : "border-border hover:border-muted-foreground/30 bg-secondary/50"
+                  )}
+                >
+                  <div className="flex gap-1">
+                    {t.preview.map((c, i) => (
+                      <div key={i} className="w-4 h-4 rounded-full border border-border/50" style={{ backgroundColor: c }} />
+                    ))}
+                  </div>
+                  <span className="text-[10px] font-medium text-foreground">{t.label}</span>
+                  {colorTheme === t.id && (
+                    <div className="absolute top-1 right-1 w-4 h-4 rounded-full bg-primary flex items-center justify-center">
+                      <Check className="w-2.5 h-2.5 text-primary-foreground" />
+                    </div>
+                  )}
+                </button>
+              ))}
+            </div>
           </div>
         </Section>
 
