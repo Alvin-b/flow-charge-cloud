@@ -43,7 +43,7 @@ const Register = () => {
         title: "Check your email",
         description: "We sent a confirmation link to verify your account.",
       });
-      navigate("/auth/login");
+      navigate("/auth/confirm-email", { state: { email: email.trim(), password }, replace: true });
     } catch (err: any) {
       toast({ title: "Error", description: err.message, variant: "destructive" });
     } finally {
