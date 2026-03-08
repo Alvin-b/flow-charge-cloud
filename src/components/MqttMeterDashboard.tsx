@@ -87,7 +87,7 @@ export function MqttMeterDashboard({
       export: d.export_total_active || 0,
     }));
 
-  const opsData = (operations?.data || []) as Array<{ status: string; operation_type: string; requested_at: string }>;
+  const opsData = (operations?.data || []) as Array<{ status: string; operation_type: string; requested_at: string; operation_id: string }>;
   const recentOpsCount = {
     pending: opsData.filter((o) => o.status === "pending").length,
     completed: opsData.filter((o) => o.status === "completed").length,
