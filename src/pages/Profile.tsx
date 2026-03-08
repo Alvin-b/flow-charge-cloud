@@ -20,8 +20,18 @@ import { IoTSettingsPanel } from "@/components/iot/IoTSettingsPanel";
 const Profile = () => {
   const navigate = useNavigate();
   const { mode, toggleMode, colorTheme, setColorTheme } = useTheme();
-  const { profile, signOut, refreshProfile } = useAuth();
+  const { user, profile, signOut, refreshProfile } = useAuth();
   const { toast } = useToast();
+  const [idCopied, setIdCopied] = useState(false);
+
+  const copyUserId = () => {
+    if (!user?.id) return;
+    navigator.clipboard.writeText(user.id);
+    setIdCopied(true);
+    Sounds.tap();
+    toast({ title: "User ID copied!", description: "Share this with others to receive energy transfers" });
+    setTimeout(() => setIdCopied(false), 2000);
+  };
   const [biometric, setBiometric] = useState(() => localStorage.getItem("powerflow-biometric-enabled") === "true");
   const { enabledModules, toggleModule } = useIoTModules();
   const [biometricSupported, setBiometricSupported] = useState(false);
