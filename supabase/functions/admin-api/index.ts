@@ -124,6 +124,12 @@ Deno.serve(async (req) => {
         return json(await listRateLimits(supabaseAdmin, body));
       case "test_mqtt":
         return json(await testMqttConnection(supabaseAdmin));
+      case "register_meters_bulk":
+        return json(await registerMetersBulk(supabaseAdmin, body, userId));
+      case "list_meter_registry":
+        return json(await listMeterRegistry(supabaseAdmin, body));
+      case "delete_registry_entry":
+        return json(await deleteRegistryEntry(supabaseAdmin, body.id));
       default:
         return json({ error: `Unknown action: ${action}` }, 400);
     }
@@ -754,7 +760,97 @@ async function testMqttConnection(sb: any) {
     if (res2.ok) {
       const data = await res2.json().catch(() => ({}));
       return { connected: true, version: data.rel_vsn || "unknown", nodes: 1 };
+}
+
+// ─── Meter Registry (Bulk Registration) ──────────────────
+
+async function registerMetersBulk(sb: any, opts: any, adminUserId: string) {
+  const { meters } = opts;
+  if (!Array.isArray(meters) || meters.length === 0) {
+    throw new Error("meters array is required (each item: { mqtt_meter_id, name?, property_name?, notes? })");
+  }
+
+  if (meters.length > 500) {
+    throw new Error("Maximum 500 meters per bulk registration");
+  }
+
+  const results: { success: string[]; duplicates: string[]; errors: string[] } = {
+    success: [],
+    duplicates: [],
+    errors: [],
+  };
+
+  // Process in batches of 50
+  for (let i = 0; i < meters.length; i += 50) {
+    const batch = meters.slice(i, i + 50);
+    const rows = batch.map((m: any) => ({
+      mqtt_meter_id: String(m.mqtt_meter_id || m.mn || "").trim(),
+      name: m.name || "COMPERE DDS666",
+      property_name: m.property_name || null,
+      registered_by: adminUserId,
+      notes: m.notes || null,
+    })).filter((r: any) => r.mqtt_meter_id.length > 0);
+
+    for (const row of rows) {
+      const { error } = await sb.from("meter_registry").insert(row);
+      if (error) {
+        if (error.code === "23505") {
+          results.duplicates.push(row.mqtt_meter_id);
+        } else {
+          results.errors.push(`${row.mqtt_meter_id}: ${error.message}`);
+        }
+      } else {
+        results.success.push(row.mqtt_meter_id);
+      }
     }
+  }
+
+  return {
+    success: true,
+    registered: results.success.length,
+    duplicates: results.duplicates.length,
+    errors: results.errors.length,
+    details: results,
+  };
+}
+
+async function listMeterRegistry(sb: any, opts: any) {
+  const { page = 1, limit = 50, search = "", filter } = opts;
+  const offset = (page - 1) * limit;
+
+  let query = sb.from("meter_registry").select("*", { count: "exact" });
+
+  if (search) {
+    query = query.or(`mqtt_meter_id.ilike.%${search}%,name.ilike.%${search}%,property_name.ilike.%${search}%`);
+  }
+  if (filter === "claimed") query = query.eq("is_claimed", true);
+  if (filter === "unclaimed") query = query.eq("is_claimed", false);
+
+  const { data, count } = await query
+    .order("created_at", { ascending: false })
+    .range(offset, offset + limit - 1);
+
+  // Stats
+  const { count: totalCount } = await sb.from("meter_registry").select("*", { count: "exact", head: true });
+  const { count: claimedCount } = await sb.from("meter_registry").select("*", { count: "exact", head: true }).eq("is_claimed", true);
+
+  return {
+    meters: data || [],
+    total: count ?? 0,
+    stats: {
+      total_registered: totalCount ?? 0,
+      claimed: claimedCount ?? 0,
+      unclaimed: (totalCount ?? 0) - (claimedCount ?? 0),
+    },
+  };
+}
+
+async function deleteRegistryEntry(sb: any, id: string) {
+  if (!id) throw new Error("Registry entry ID required");
+  const { error } = await sb.from("meter_registry").delete().eq("id", id).eq("is_claimed", false);
+  if (error) throw error;
+  return { success: true };
+}
 
     return { connected: false, error: `HTTP ${res.status}: ${res.statusText}` };
   } catch (e: any) {
