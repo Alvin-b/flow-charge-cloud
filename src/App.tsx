@@ -14,6 +14,7 @@ import Register from "./pages/auth/Register";
 import Login from "./pages/auth/Login";
 import PinSetup from "./pages/auth/PinSetup";
 import ForgotPin from "./pages/auth/ForgotPin";
+import EmailConfirmWait from "./pages/auth/EmailConfirmWait";
 import Home from "./pages/Home";
 import Recharge from "./pages/Recharge";
 import Analytics from "./pages/Analytics";
