@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Search, CheckCircle, XCircle, ArrowUpRight, ArrowDownLeft, Loader2 } from "lucide-react";
+import { ArrowLeft, Search, CheckCircle, XCircle, ArrowUpRight, ArrowDownLeft, Loader2, Copy, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import BottomNav from "@/components/BottomNav";
 import { transferApi } from "@/lib/api";
@@ -17,7 +17,7 @@ interface TransferResult {
   transaction_id: string;
   amount_kwh: number;
   amount_kes: number;
-  recipient_phone: string;
+  recipient_id: string;
   recipient_name: string | null;
   new_balance: number;
 }
@@ -27,9 +27,8 @@ interface TransferTx {
   type: string;
   amount_kwh: number;
   amount_kes: number;
-  recipient_phone: string;
   created_at: string;
-  metadata: { recipient_name?: string; sender_name?: string };
+  metadata: { recipient_name?: string; sender_name?: string; recipient_id?: string; sender_id?: string };
   user_id: string;
 }
 
@@ -44,7 +43,6 @@ const Transfer = () => {
   const [sendLoading, setSendLoading] = useState(false);
   const [transferResult, setTransferResult] = useState<TransferResult | null>(null);
 
-  // Daily usage from backend
   const [dailyUsage, setDailyUsage] = useState({ used_today: 0, daily_limit: 50, remaining: 50 });
   const [history, setHistory] = useState<TransferTx[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
@@ -88,9 +86,8 @@ const Transfer = () => {
     setStep("animating");
     setSendLoading(true);
     try {
-      const result = await transferApi.send(recipient, parseFloat(amount));
+      const result = await transferApi.send(recipient.trim(), parseFloat(amount));
       setTransferResult(result);
-      // Refresh daily usage
       transferApi.getDailyUsage().then(setDailyUsage).catch(console.error);
       setTimeout(() => { Sounds.success(); setStep("success"); }, 1500);
     } catch (err: any) {
@@ -108,7 +105,6 @@ const Transfer = () => {
     setAmount("");
     setRecipient("");
     setTransferResult(null);
-    // Reload history
     setHistory([]);
   };
 
@@ -125,9 +121,9 @@ const Transfer = () => {
     return d.toLocaleDateString("en-KE", { month: "short", day: "numeric" }) + `, ${time}`;
   };
 
-  const maskPhone = (phone: string) => {
-    if (!phone || phone.length < 6) return phone;
-    return phone.slice(0, 4) + " *** " + phone.slice(-3);
+  const truncateId = (id: string) => {
+    if (!id || id.length < 12) return id;
+    return id.slice(0, 6) + "…" + id.slice(-4);
   };
 
   if (step === "animating") {
@@ -148,7 +144,7 @@ const Transfer = () => {
         </div>
         <div className="text-center">
           <p className="text-lg font-bold text-foreground">Transferring {amount} kWh…</p>
-          <p className="text-muted-foreground text-sm mt-1">Sending to {recipient}</p>
+          <p className="text-muted-foreground text-sm mt-1">Sending to {truncateId(recipient)}</p>
         </div>
       </div>
     );
@@ -166,7 +162,7 @@ const Transfer = () => {
         </div>
         <div className="w-full max-w-sm glass-card rounded-2xl p-5 space-y-3 animate-fade-in-up" style={{ animationDelay: "0.15s" }}>
           {[
-            ["Recipient", transferResult.recipient_name || maskPhone(transferResult.recipient_phone)],
+            ["Recipient", transferResult.recipient_name || truncateId(transferResult.recipient_id)],
             ["Amount Sent", `${transferResult.amount_kwh} kWh`],
             ["KES Equivalent", `KES ${transferResult.amount_kes.toLocaleString()}`],
             ["New Balance", `${transferResult.new_balance.toFixed(1)} kWh`],
@@ -271,15 +267,16 @@ const Transfer = () => {
             <p className="text-xs text-success mt-2 font-medium">{dailyUsage.remaining.toFixed(1)} kWh remaining today</p>
           </div>
 
-          {/* Recipient */}
+          {/* Recipient User ID */}
           <div className="animate-fade-in-up" style={{ animationDelay: "0.1s" }}>
-            <p className="text-sm font-medium text-muted-foreground mb-2">Recipient phone number</p>
+            <p className="text-sm font-medium text-muted-foreground mb-2">Recipient User ID</p>
             <div className="relative">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <input type="tel" placeholder="+254 7XX XXX XXX" value={recipient}
+              <input type="text" placeholder="Paste recipient's User ID" value={recipient}
                 onChange={(e) => setRecipient(e.target.value)}
-                className="w-full pl-11 pr-4 py-4 glass-card rounded-xl border border-border/50 bg-transparent text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/50 font-medium transition-colors" />
+                className="w-full pl-11 pr-4 py-4 glass-card rounded-xl border border-border/50 bg-transparent text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/50 font-mono text-sm transition-colors" />
             </div>
+            <p className="text-[10px] text-muted-foreground mt-1.5">Ask the recipient for their User ID from their Profile page</p>
           </div>
 
           {/* Amount */}
@@ -316,8 +313,8 @@ const Transfer = () => {
               {history.map((tx, i) => {
                 const isOut = tx.type === "transfer_out";
                 const label = isOut
-                  ? `To ${tx.metadata?.recipient_name || maskPhone(tx.recipient_phone)}`
-                  : `From ${tx.metadata?.sender_name || maskPhone(tx.recipient_phone)}`;
+                  ? `To ${tx.metadata?.recipient_name || truncateId(tx.metadata?.recipient_id || "")}`
+                  : `From ${tx.metadata?.sender_name || truncateId(tx.metadata?.sender_id || "")}`;
                 return (
                   <div key={tx.id} className={`flex items-center gap-3 p-4 ${i < history.length - 1 ? "border-b border-border/30" : ""}`}>
                     <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${isOut ? "bg-destructive/15" : "bg-success/15"}`}>

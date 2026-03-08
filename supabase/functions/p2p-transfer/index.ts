@@ -22,7 +22,6 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    // Authenticate user
     const authHeader = req.headers.get("Authorization")!;
     const token = authHeader.replace("Bearer ", "");
     const {
@@ -41,11 +40,20 @@ serve(async (req) => {
     const action = url.searchParams.get("action");
 
     if (action === "send" && req.method === "POST") {
-      const { recipient_phone, amount_kwh } = await req.json();
+      const { recipient_id, amount_kwh } = await req.json();
 
-      if (!recipient_phone || !amount_kwh) {
+      if (!recipient_id || !amount_kwh) {
         return new Response(
-          JSON.stringify({ error: "recipient_phone and amount_kwh are required" }),
+          JSON.stringify({ error: "recipient_id and amount_kwh are required" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // Validate UUID format
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!uuidRegex.test(recipient_id)) {
+        return new Response(
+          JSON.stringify({ error: "Invalid User ID format" }),
           { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
@@ -58,11 +66,10 @@ serve(async (req) => {
         );
       }
 
-      // Validate phone format
-      const phoneStr = String(recipient_phone).replace(/[^0-9+]/g, "");
-      if (phoneStr.length < 9 || phoneStr.length > 15) {
+      // Cannot send to self
+      if (recipient_id === user.id) {
         return new Response(
-          JSON.stringify({ error: "Invalid phone number" }),
+          JSON.stringify({ error: "Cannot transfer to yourself" }),
           { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
@@ -81,11 +88,6 @@ serve(async (req) => {
           { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
-
-      // Format phone for lookup
-      let phone = phoneStr.replace(/[+]/g, "");
-      if (phone.startsWith("0")) phone = "254" + phone.substring(1);
-      if (!phone.startsWith("254")) phone = "254" + phone;
 
       // Check daily limit
       const todayStart = new Date();
@@ -113,6 +115,23 @@ serve(async (req) => {
         );
       }
 
+      // Find recipient by user_id in profiles
+      const { data: recipientProfile } = await supabase
+        .from("profiles")
+        .select("user_id, full_name, phone")
+        .eq("user_id", recipient_id)
+        .single();
+
+      if (!recipientProfile) {
+        return new Response(
+          JSON.stringify({ error: "Recipient not found. Please check the User ID." }),
+          { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      const recipientUserId = recipientProfile.user_id;
+      const recipientName = recipientProfile.full_name;
+
       // Get sender wallet
       const { data: senderWallet, error: swErr } = await supabase
         .from("wallets")
@@ -130,35 +149,6 @@ serve(async (req) => {
       if (parseFloat(senderWallet.balance_kwh) < kwh) {
         return new Response(
           JSON.stringify({ error: `Insufficient balance. You have ${senderWallet.balance_kwh} kWh` }),
-          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-
-      // Find recipient by phone in auth.users (metadata.phone or phone)
-      // First look in profiles or auth metadata
-      const phoneVariants = [
-        phone,
-        recipient_phone,
-        `0${phone.substring(3)}`,
-      ];
-
-      const { data: recipientProfiles } = await supabase
-        .from("profiles")
-        .select("user_id, full_name, phone")
-        .in("phone", phoneVariants);
-
-      let recipientUserId: string | null = null;
-      let recipientName: string | null = null;
-
-      if (recipientProfiles && recipientProfiles.length > 0) {
-        recipientUserId = recipientProfiles[0].user_id;
-        recipientName = recipientProfiles[0].full_name;
-      }
-
-      // Cannot send to self
-      if (recipientUserId === user.id) {
-        return new Response(
-          JSON.stringify({ error: "Cannot transfer to yourself" }),
           { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
@@ -181,22 +171,20 @@ serve(async (req) => {
         );
       }
 
-      // 2. Credit recipient (if found)
-      if (recipientUserId) {
-        const { data: recipientWallet } = await supabase
-          .from("wallets")
-          .select("balance_kwh")
-          .eq("user_id", recipientUserId)
-          .single();
+      // 2. Credit recipient
+      const { data: recipientWallet } = await supabase
+        .from("wallets")
+        .select("balance_kwh")
+        .eq("user_id", recipientUserId)
+        .single();
 
-        if (recipientWallet) {
-          await supabase
-            .from("wallets")
-            .update({
-              balance_kwh: parseFloat(recipientWallet.balance_kwh) + kwh,
-            })
-            .eq("user_id", recipientUserId);
-        }
+      if (recipientWallet) {
+        await supabase
+          .from("wallets")
+          .update({
+            balance_kwh: parseFloat(recipientWallet.balance_kwh) + kwh,
+          })
+          .eq("user_id", recipientUserId);
       }
 
       // 3. Create outgoing transaction
@@ -209,10 +197,10 @@ serve(async (req) => {
           amount_kes: kesEquiv,
           status: "completed",
           recipient_user_id: recipientUserId,
-          recipient_phone: phone,
           completed_at: new Date().toISOString(),
           metadata: {
             recipient_name: recipientName,
+            recipient_id: recipientUserId,
             sender_balance_before: parseFloat(senderWallet.balance_kwh),
             sender_balance_after: newSenderBalance,
           },
@@ -221,36 +209,34 @@ serve(async (req) => {
         .single();
 
       // 4. Create incoming transaction for recipient
-      const senderName = (await supabase.from("profiles").select("full_name").eq("id", user.id).single()).data?.full_name || "Someone";
-      if (recipientUserId) {
-        await supabase.from("transactions").insert({
-          user_id: recipientUserId,
-          type: "transfer_in",
-          amount_kwh: kwh,
-          amount_kes: kesEquiv,
-          status: "completed",
-          recipient_user_id: user.id,
-          recipient_phone: user.phone || "",
-          completed_at: new Date().toISOString(),
-          metadata: { sender_name: senderName },
-        });
+      const senderName = (await supabase.from("profiles").select("full_name").eq("user_id", user.id).single()).data?.full_name || "Someone";
 
-        // Notification for recipient
-        await supabase.rpc("insert_notification", {
-          p_user_id: recipientUserId,
-          p_type: "transfer",
-          p_title: "Energy Received",
-          p_body: `${kwh} kWh received from ${senderName} (+KES ${kesEquiv})`,
-          p_icon: "🟢",
-        });
-      }
+      await supabase.from("transactions").insert({
+        user_id: recipientUserId,
+        type: "transfer_in",
+        amount_kwh: kwh,
+        amount_kes: kesEquiv,
+        status: "completed",
+        recipient_user_id: user.id,
+        completed_at: new Date().toISOString(),
+        metadata: { sender_name: senderName, sender_id: user.id },
+      });
+
+      // Notification for recipient
+      await supabase.rpc("insert_notification", {
+        p_user_id: recipientUserId,
+        p_type: "transfer",
+        p_title: "Energy Received",
+        p_body: `${kwh} kWh received from ${senderName} (+KES ${kesEquiv})`,
+        p_icon: "🟢",
+      });
 
       // Notification for sender
       await supabase.rpc("insert_notification", {
         p_user_id: user.id,
         p_type: "transfer",
         p_title: "Transfer Sent",
-        p_body: `${kwh} kWh sent to ${recipientName || phone} (KES ${kesEquiv})`,
+        p_body: `${kwh} kWh sent to ${recipientName} (KES ${kesEquiv})`,
         p_icon: "📤",
       });
 
@@ -260,7 +246,7 @@ serve(async (req) => {
           transaction_id: outTx?.id,
           amount_kwh: kwh,
           amount_kes: kesEquiv,
-          recipient_phone: phone,
+          recipient_id: recipientUserId,
           recipient_name: recipientName,
           new_balance: newSenderBalance,
         }),

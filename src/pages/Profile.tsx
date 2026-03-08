@@ -10,6 +10,7 @@ import BottomNav from "@/components/BottomNav";
 import { useTheme, COLOR_THEMES } from "@/components/ThemeProvider";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
+import { Copy as CopyIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { Sounds } from "@/lib/sounds";
@@ -19,8 +20,18 @@ import { IoTSettingsPanel } from "@/components/iot/IoTSettingsPanel";
 const Profile = () => {
   const navigate = useNavigate();
   const { mode, toggleMode, colorTheme, setColorTheme } = useTheme();
-  const { profile, signOut, refreshProfile } = useAuth();
+  const { user, profile, signOut, refreshProfile } = useAuth();
   const { toast } = useToast();
+  const [idCopied, setIdCopied] = useState(false);
+
+  const copyUserId = () => {
+    if (!user?.id) return;
+    navigator.clipboard.writeText(user.id);
+    setIdCopied(true);
+    Sounds.tap();
+    toast({ title: "User ID copied!", description: "Share this with others to receive energy transfers" });
+    setTimeout(() => setIdCopied(false), 2000);
+  };
   const [biometric, setBiometric] = useState(() => localStorage.getItem("powerflow-biometric-enabled") === "true");
   const { enabledModules, toggleModule } = useIoTModules();
   const [biometricSupported, setBiometricSupported] = useState(false);
@@ -167,6 +178,24 @@ const Profile = () => {
             ))}
           </div>
         </div>
+
+        {/* User ID for transfers */}
+        <Section title="Your User ID">
+          <div className="px-4 py-4">
+            <p className="text-[10px] text-muted-foreground mb-2">Share this ID with others so they can send you energy tokens</p>
+            <div className="flex items-center gap-2">
+              <code className="flex-1 text-xs font-mono bg-secondary rounded-lg px-3 py-2.5 text-foreground break-all select-all border border-border">
+                {user?.id || "—"}
+              </code>
+              <button
+                onClick={copyUserId}
+                className="shrink-0 p-2.5 rounded-xl bg-primary/10 hover:bg-primary/20 transition-colors"
+              >
+                {idCopied ? <Check className="w-4 h-4 text-success" /> : <CopyIcon className="w-4 h-4 text-primary" />}
+              </button>
+            </div>
+          </div>
+        </Section>
 
         <Section title="Account">
           <MenuItem icon={User} label="Edit Profile" subtitle="Update name, phone, email" onClick={openEditProfile} />
