@@ -27,7 +27,6 @@ const Profile = () => {
   const [meterCount, setMeterCount] = useState(0);
   const [walletBalance, setWalletBalance] = useState(0);
 
-  // Edit profile state
   const [editOpen, setEditOpen] = useState(false);
   const [editName, setEditName] = useState("");
   const [editPhone, setEditPhone] = useState("");
@@ -43,12 +42,9 @@ const Profile = () => {
         ]);
         setMeterCount(metersRes.count ?? 0);
         setWalletBalance(walletRes.data?.balance_kwh ?? 0);
-      } catch {
-        // Non-critical — profile page still works
-      }
+      } catch {}
     };
     fetchStats();
-    // Check WebAuthn platform authenticator support
     if ("PublicKeyCredential" in window) {
       PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable?.().then(setBiometricSupported).catch(() => {});
     }
@@ -87,11 +83,7 @@ const Profile = () => {
   };
 
   const initials = (profile?.full_name || "U")
-    .split(" ")
-    .map((n) => n[0])
-    .join("")
-    .toUpperCase()
-    .slice(0, 2);
+    .split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2);
 
   const handleLogout = async () => {
     await signOut();
@@ -101,16 +93,16 @@ const Profile = () => {
   const Section = ({ title, children }: { title: string; children: React.ReactNode }) => (
     <div className="animate-fade-in-up">
       <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-[0.15em] mb-2.5 px-1">{title}</p>
-      <div className="glass-card-elevated rounded-2xl overflow-hidden border border-border/10">{children}</div>
+      <div className="glass-card-elevated rounded-2xl overflow-hidden">{children}</div>
     </div>
   );
 
   const MenuItem = ({ icon: Icon, label, right, onClick, danger = false, subtitle }: {
     icon: React.ElementType; label: string; right?: React.ReactNode; onClick?: () => void; danger?: boolean; subtitle?: string;
   }) => (
-    <button onClick={onClick} className="w-full flex items-center gap-3 px-4 py-3.5 hover:bg-muted/10 transition-colors border-b border-border/10 last:border-0 text-left card-interactive">
+    <button onClick={onClick} className="w-full flex items-center gap-3 px-4 py-3.5 hover:bg-secondary/50 transition-colors border-b border-border last:border-0 text-left card-interactive">
       <div className={cn("w-9 h-9 rounded-xl flex items-center justify-center",
-        danger ? "bg-destructive/15" : "bg-primary/8"
+        danger ? "bg-destructive/10" : "bg-primary/8"
       )}>
         <Icon className={cn("w-4 h-4", danger ? "text-destructive" : "text-primary")} />
       </div>
@@ -123,63 +115,56 @@ const Profile = () => {
   );
 
   return (
-    <div className="min-h-screen gradient-navy pb-28 relative overflow-hidden">
-      <div className="absolute inset-0 gradient-mesh pointer-events-none" />
-      <div className="absolute top-0 right-0 w-80 h-80 rounded-full bg-primary/4 blur-[100px] pointer-events-none" />
-
-      <div className="relative px-5 pt-14 pb-2 animate-fade-in">
+    <div className="min-h-screen bg-background pb-28">
+      <div className="px-5 pt-14 pb-2 animate-fade-in">
         <h1 className="text-xl font-bold text-foreground tracking-tight">Profile</h1>
         <p className="text-xs text-muted-foreground">Manage your account & preferences</p>
       </div>
 
-      <div className="relative px-5 space-y-5 mt-3">
+      <div className="px-5 space-y-5 mt-3">
         {/* Profile hero card */}
-        <div className="glass-card-elevated rounded-3xl p-6 border border-border/10 animate-fade-in-up relative overflow-hidden">
-          <div className="absolute inset-0 shimmer-overlay pointer-events-none opacity-50" />
-          <div className="relative z-10">
-            <div className="flex items-center gap-4">
-              <div className="relative">
-                <div className="w-20 h-20 rounded-3xl gradient-cyan flex items-center justify-center text-2xl font-bold text-[hsl(var(--navy))] shadow-lg shadow-primary/25">
-                  {initials}
-                </div>
-                <button onClick={openEditProfile} className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full gradient-cyan flex items-center justify-center border-2 border-background shadow-md">
-                  <Edit3 className="w-3 h-3 text-[hsl(var(--navy))]" />
-                </button>
-                <div className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-success border-2 border-background" />
+        <div className="glass-card-elevated rounded-3xl p-6 animate-fade-in-up">
+          <div className="flex items-center gap-4">
+            <div className="relative">
+              <div className="w-20 h-20 rounded-3xl bg-primary flex items-center justify-center text-2xl font-bold text-primary-foreground shadow-md">
+                {initials}
               </div>
-              <div className="flex-1">
-                <div className="flex items-center gap-2 mb-0.5">
-                  <h2 className="text-lg font-bold text-foreground">{profile?.full_name || "Set your name"}</h2>
-                  <Crown className="w-4 h-4 text-accent" />
-                </div>
-                {profile?.phone && (
-                  <div className="flex items-center gap-1.5 mb-0.5">
-                    <Phone className="w-3 h-3 text-muted-foreground" />
-                    <p className="text-xs text-muted-foreground">{profile.phone}</p>
-                  </div>
-                )}
-                {profile?.email && (
-                  <div className="flex items-center gap-1.5">
-                    <Mail className="w-3 h-3 text-muted-foreground" />
-                    <p className="text-xs text-muted-foreground">{profile.email}</p>
-                  </div>
-                )}
-              </div>
+              <button onClick={openEditProfile} className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-primary flex items-center justify-center border-2 border-background shadow-md">
+                <Edit3 className="w-3 h-3 text-primary-foreground" />
+              </button>
+              <div className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-success border-2 border-background" />
             </div>
+            <div className="flex-1">
+              <div className="flex items-center gap-2 mb-0.5">
+                <h2 className="text-lg font-bold text-foreground">{profile?.full_name || "Set your name"}</h2>
+                <Crown className="w-4 h-4 text-accent" />
+              </div>
+              {profile?.phone && (
+                <div className="flex items-center gap-1.5 mb-0.5">
+                  <Phone className="w-3 h-3 text-muted-foreground" />
+                  <p className="text-xs text-muted-foreground">{profile.phone}</p>
+                </div>
+              )}
+              {profile?.email && (
+                <div className="flex items-center gap-1.5">
+                  <Mail className="w-3 h-3 text-muted-foreground" />
+                  <p className="text-xs text-muted-foreground">{profile.email}</p>
+                </div>
+              )}
+            </div>
+          </div>
 
-            {/* Stats row */}
-            <div className="mt-5 grid grid-cols-3 gap-2.5">
-              {[
-                { label: "Balance", val: `${walletBalance} kWh`, color: "text-primary" },
-                { label: "Meters", val: `${meterCount} linked`, color: "text-accent" },
-                { label: "PIN", val: profile?.has_pin ? "Set ✓" : "Not set", color: profile?.has_pin ? "text-success" : "text-destructive" },
-              ].map(({ label, val, color }) => (
-                <div key={label} className="bg-white/5 rounded-xl p-3 border border-white/5 text-center">
-                  <p className="text-[9px] text-muted-foreground uppercase tracking-wider">{label}</p>
-                  <p className={cn("text-sm font-bold mt-1", color)}>{val}</p>
-                </div>
-              ))}
-            </div>
+          <div className="mt-5 grid grid-cols-3 gap-2.5">
+            {[
+              { label: "Balance", val: `${walletBalance} kWh`, color: "text-primary" },
+              { label: "Meters", val: `${meterCount} linked`, color: "text-accent" },
+              { label: "PIN", val: profile?.has_pin ? "Set ✓" : "Not set", color: profile?.has_pin ? "text-success" : "text-destructive" },
+            ].map(({ label, val, color }) => (
+              <div key={label} className="bg-secondary rounded-xl p-3 text-center">
+                <p className="text-[9px] text-muted-foreground uppercase tracking-wider">{label}</p>
+                <p className={cn("text-sm font-bold mt-1", color)}>{val}</p>
+              </div>
+            ))}
           </div>
         </div>
 
@@ -226,9 +211,7 @@ const Profile = () => {
                       localStorage.setItem("powerflow-biometric-enabled", "true");
                       setBiometric(true);
                     }
-                  } catch {
-                    // User cancelled or not supported
-                  }
+                  } catch {}
                 } else {
                   localStorage.removeItem("powerflow-webauthn-credential");
                   localStorage.setItem("powerflow-biometric-enabled", "false");
@@ -241,25 +224,14 @@ const Profile = () => {
         </Section>
 
         <Section title="Linked Meters">
-          <MenuItem 
-            icon={Zap} 
-            label="Manage Meters" 
-            subtitle={`${meterCount} meter${meterCount !== 1 ? "s" : ""} connected`}
-            onClick={() => navigate("/meters")} 
-          />
-          <MenuItem
-            icon={Cpu}
-            label="IoT Hub"
-            subtitle={`${enabledModules.length} modules active`}
-            onClick={() => navigate("/iot")}
-          />
+          <MenuItem icon={Zap} label="Manage Meters" subtitle={`${meterCount} meter${meterCount !== 1 ? "s" : ""} connected`} onClick={() => navigate("/meters")} />
+          <MenuItem icon={Cpu} label="IoT Hub" subtitle={`${enabledModules.length} modules active`} onClick={() => navigate("/iot")} />
         </Section>
 
-        {/* IoT Module Toggles */}
         <IoTSettingsPanel enabledModules={enabledModules} onToggle={toggleModule} />
 
         <Section title="Appearance">
-          <div className="flex items-center gap-3 px-4 py-3.5 border-b border-border/10">
+          <div className="flex items-center gap-3 px-4 py-3.5 border-b border-border">
             <div className="w-9 h-9 rounded-xl bg-primary/8 flex items-center justify-center">
               {theme === "dark" ? <Moon className="w-4 h-4 text-primary" /> : <Sun className="w-4 h-4 text-accent" />}
             </div>
@@ -289,14 +261,14 @@ const Profile = () => {
       {/* ── Edit Profile Modal ── */}
       {editOpen && (
         <div className="fixed inset-0 z-[60] flex items-end">
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setEditOpen(false)} />
-          <div className="relative w-full glass-card rounded-t-3xl p-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] border-t border-primary/15 animate-slide-up max-h-[85vh] overflow-y-auto">
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setEditOpen(false)} />
+          <div className="relative w-full bg-card rounded-t-3xl p-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] border-t border-border animate-slide-up max-h-[85vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-6">
               <div>
                 <h2 className="text-xl font-bold text-foreground">Edit Profile</h2>
                 <p className="text-xs text-muted-foreground mt-0.5">Update your personal information</p>
               </div>
-              <button onClick={() => setEditOpen(false)} className="p-2 rounded-xl hover:bg-muted/30">
+              <button onClick={() => setEditOpen(false)} className="p-2 rounded-xl hover:bg-secondary">
                 <X className="w-5 h-5 text-muted-foreground" />
               </button>
             </div>
@@ -306,57 +278,33 @@ const Profile = () => {
                 <label className="text-sm font-medium text-muted-foreground mb-1.5 block">Full Name *</label>
                 <div className="relative">
                   <User className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <input
-                    value={editName}
-                    onChange={(e) => setEditName(e.target.value)}
-                    placeholder="e.g. James Kamau"
-                    className="w-full pl-11 pr-4 py-3.5 glass-card rounded-xl border border-border/50 bg-transparent text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-primary/50 text-base"
-                  />
+                  <input value={editName} onChange={(e) => setEditName(e.target.value)} placeholder="e.g. James Kamau"
+                    className="w-full pl-11 pr-4 py-3.5 bg-secondary rounded-xl border border-border text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-base" />
                 </div>
               </div>
-
               <div>
                 <label className="text-sm font-medium text-muted-foreground mb-1.5 block">Phone Number</label>
                 <div className="relative">
                   <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <input
-                    value={editPhone}
-                    onChange={(e) => setEditPhone(e.target.value)}
-                    placeholder="e.g. 0712345678"
-                    type="tel"
-                    className="w-full pl-11 pr-4 py-3.5 glass-card rounded-xl border border-border/50 bg-transparent text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-primary/50 text-base"
-                  />
+                  <input value={editPhone} onChange={(e) => setEditPhone(e.target.value)} placeholder="e.g. 0712345678" type="tel"
+                    className="w-full pl-11 pr-4 py-3.5 bg-secondary rounded-xl border border-border text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-base" />
                 </div>
                 <p className="text-[10px] text-muted-foreground mt-1">Used for M-Pesa payments and transfers</p>
               </div>
-
               <div>
                 <label className="text-sm font-medium text-muted-foreground mb-1.5 block">Email</label>
                 <div className="relative">
                   <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <input
-                    value={editEmail}
-                    onChange={(e) => setEditEmail(e.target.value)}
-                    placeholder="you@example.com"
-                    type="email"
-                    className="w-full pl-11 pr-4 py-3.5 glass-card rounded-xl border border-border/50 bg-transparent text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-primary/50 text-base"
-                  />
+                  <input value={editEmail} onChange={(e) => setEditEmail(e.target.value)} placeholder="you@example.com" type="email"
+                    className="w-full pl-11 pr-4 py-3.5 bg-secondary rounded-xl border border-border text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-base" />
                 </div>
               </div>
-
-              <Button
-                onClick={saveProfile}
-                disabled={!editName.trim() || editSaving}
-                className="w-full h-12 gradient-cyan text-[hsl(var(--navy))] font-bold rounded-xl disabled:opacity-40 mt-2"
-              >
+              <Button onClick={saveProfile} disabled={!editName.trim() || editSaving}
+                className="w-full h-12 bg-primary text-primary-foreground font-bold rounded-xl disabled:opacity-40 mt-2">
                 {editSaving ? (
-                  <span className="flex items-center gap-2">
-                    <Loader2 className="w-4 h-4 animate-spin" /> Saving…
-                  </span>
+                  <span className="flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Saving…</span>
                 ) : (
-                  <span className="flex items-center gap-2">
-                    <Check className="w-4 h-4" /> Save Changes
-                  </span>
+                  <span className="flex items-center gap-2"><Check className="w-4 h-4" /> Save Changes</span>
                 )}
               </Button>
             </div>
