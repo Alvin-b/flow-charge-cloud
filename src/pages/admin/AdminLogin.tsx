@@ -53,6 +53,8 @@ export default function AdminLogin() {
         return;
       }
 
+      // Wait briefly for AuthProvider to process the session change
+      await new Promise(r => setTimeout(r, 500));
       navigate("/admin/dashboard", { replace: true });
     } catch (err: any) {
       toast({ title: "Error", description: err.message, variant: "destructive" });

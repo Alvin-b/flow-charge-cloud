@@ -120,6 +120,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         setSession(session);
         setUser(session?.user ?? null);
         if (session?.user) {
+          // Set loading true while we fetch the profile to prevent
+          // AuthGuard from seeing profile=null and redirecting
+          setLoading(true);
           await fetchProfile(session.user.id);
         } else {
           setProfile(null);
