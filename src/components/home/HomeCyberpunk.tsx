@@ -9,6 +9,7 @@ import BottomNav from "@/components/BottomNav";
 import { cn } from "@/lib/utils";
 import { Sounds } from "@/lib/sounds";
 import { HomeData, getTimeAgo } from "./HomeDataProvider";
+import AIInsights from "@/components/AIInsights";
 
 const EnergyRing = ({ pct, isLow }: { pct: number; isLow: boolean }) => {
   const r = 54;
@@ -281,6 +282,11 @@ export default function HomeCyberpunk({ data }: { data: HomeData }) {
               </div>
             )}
           </div>
+        </motion.div>
+
+        {/* AI Smart Tips */}
+        <motion.div variants={stagger.item}>
+          <AIInsights />
         </motion.div>
 
         {/* System Status */}
