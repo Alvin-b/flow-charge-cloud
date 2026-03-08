@@ -88,9 +88,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   useEffect(() => {
+    let initialised = false;
+
     // Set up auth state listener FIRST
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (_event, session) => {
+      async (event, session) => {
+        // On INITIAL_SESSION let getSession handle it to avoid race
+        if (event === "INITIAL_SESSION") return;
+
         setSession(session);
         setUser(session?.user ?? null);
         if (session?.user) {
@@ -102,8 +107,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       }
     );
 
-    // Then get current session
+    // Then restore session from storage
     supabase.auth.getSession().then(({ data: { session } }) => {
+      if (initialised) return;
+      initialised = true;
       setSession(session);
       setUser(session?.user ?? null);
       if (session?.user) {
