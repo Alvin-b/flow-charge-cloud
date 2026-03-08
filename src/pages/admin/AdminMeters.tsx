@@ -148,7 +148,8 @@ export default function AdminMeters() {
             <DialogHeader><DialogTitle>Register New Meter</DialogTitle></DialogHeader>
             <div className="space-y-4 py-2">
               <div><Label>Meter Name</Label><Input placeholder="e.g. Unit A1" value={newMeter.name} onChange={(e) => setNewMeter(p => ({ ...p, name: e.target.value }))} /></div>
-              <div><Label>Device ID</Label><Input placeholder="Tuya / COMPERE device ID" value={newMeter.tuya_device_id} onChange={(e) => setNewMeter(p => ({ ...p, tuya_device_id: e.target.value }))} /></div>
+              <div><Label>MQTT Meter ID (MN)</Label><Input placeholder="e.g. 12345678 — the meter number used for MQTT" value={newMeter.mqtt_meter_id} onChange={(e) => setNewMeter(p => ({ ...p, mqtt_meter_id: e.target.value }))} /></div>
+              <div><Label>Device ID (optional)</Label><Input placeholder="Tuya / hardware serial" value={newMeter.tuya_device_id} onChange={(e) => setNewMeter(p => ({ ...p, tuya_device_id: e.target.value }))} /></div>
               <div><Label>Property Name</Label><Input placeholder="e.g. Greenview Apartments" value={newMeter.property_name} onChange={(e) => setNewMeter(p => ({ ...p, property_name: e.target.value }))} /></div>
             </div>
             <DialogFooter>
