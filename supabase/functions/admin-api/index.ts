@@ -18,13 +18,52 @@ Deno.serve(async (req) => {
     return json({ error: "Missing action parameter" }, 400);
   }
 
-  // NOTE: Admin auth is left blank for now — to be implemented later
-  // For now, any authenticated user can access admin endpoints
+  // ── Auth: verify JWT and check admin role ──
+  const authHeader = req.headers.get("Authorization");
+  if (!authHeader?.startsWith("Bearer ")) {
+    return json({ error: "Unauthorized" }, 401);
+  }
 
   const supabaseAdmin = createClient(
     Deno.env.get("SUPABASE_URL")!,
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
   );
+
+  // Verify token and extract user ID
+  const anonClient = createClient(
+    Deno.env.get("SUPABASE_URL")!,
+    Deno.env.get("SUPABASE_ANON_KEY")!,
+    { global: { headers: { Authorization: authHeader } } },
+  );
+
+  const token = authHeader.replace("Bearer ", "");
+  const { data: claimsData, error: claimsError } = await anonClient.auth.getClaims(token);
+  if (claimsError || !claimsData?.claims) {
+    return json({ error: "Invalid token" }, 401);
+  }
+
+  const userId = claimsData.claims.sub as string;
+
+  // Check admin role in user_roles table (falls back to is_admin on profiles)
+  const { data: roleRow } = await supabaseAdmin
+    .from("user_roles")
+    .select("role")
+    .eq("user_id", userId)
+    .eq("role", "admin")
+    .maybeSingle();
+
+  if (!roleRow) {
+    // Fallback: check legacy is_admin flag on profiles
+    const { data: profileRow } = await supabaseAdmin
+      .from("profiles")
+      .select("is_admin")
+      .eq("user_id", userId)
+      .maybeSingle();
+
+    if (!profileRow?.is_admin) {
+      return json({ error: "Forbidden: admin role required" }, 403);
+    }
+  }
 
   let body: any = {};
   if (req.method === "POST") {
