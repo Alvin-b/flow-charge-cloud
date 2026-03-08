@@ -14,6 +14,178 @@ export type Database = {
   }
   public: {
     Tables: {
+      consumption_logs: {
+        Row: {
+          connection_id: string | null
+          id: string
+          kwh_used: number
+          meter_id: string
+          period_end: string | null
+          period_start: string | null
+          recorded_at: string
+          user_id: string
+        }
+        Insert: {
+          connection_id?: string | null
+          id?: string
+          kwh_used?: number
+          meter_id: string
+          period_end?: string | null
+          period_start?: string | null
+          recorded_at?: string
+          user_id: string
+        }
+        Update: {
+          connection_id?: string | null
+          id?: string
+          kwh_used?: number
+          meter_id?: string
+          period_end?: string | null
+          period_start?: string | null
+          recorded_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "consumption_logs_connection_id_fkey"
+            columns: ["connection_id"]
+            isOneToOne: false
+            referencedRelation: "meter_connections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "consumption_logs_meter_id_fkey"
+            columns: ["meter_id"]
+            isOneToOne: false
+            referencedRelation: "meters"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      kplc_payments: {
+        Row: {
+          account_number: string | null
+          amount_kes: number
+          completed_at: string | null
+          created_at: string
+          error_message: string | null
+          id: string
+          mpesa_conversation_id: string | null
+          mpesa_originator_conversation_id: string | null
+          mpesa_receipt: string | null
+          paybill: string
+          status: string
+        }
+        Insert: {
+          account_number?: string | null
+          amount_kes: number
+          completed_at?: string | null
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          mpesa_conversation_id?: string | null
+          mpesa_originator_conversation_id?: string | null
+          mpesa_receipt?: string | null
+          paybill?: string
+          status?: string
+        }
+        Update: {
+          account_number?: string | null
+          amount_kes?: number
+          completed_at?: string | null
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          mpesa_conversation_id?: string | null
+          mpesa_originator_conversation_id?: string | null
+          mpesa_receipt?: string | null
+          paybill?: string
+          status?: string
+        }
+        Relationships: []
+      }
+      meter_commands: {
+        Row: {
+          command_type: string
+          completed_at: string | null
+          created_at: string
+          id: string
+          meter_id: string
+          oprid: string | null
+          payload: Json | null
+          response: Json | null
+          status: string
+          user_id: string
+        }
+        Insert: {
+          command_type: string
+          completed_at?: string | null
+          created_at?: string
+          id?: string
+          meter_id: string
+          oprid?: string | null
+          payload?: Json | null
+          response?: Json | null
+          status?: string
+          user_id: string
+        }
+        Update: {
+          command_type?: string
+          completed_at?: string | null
+          created_at?: string
+          id?: string
+          meter_id?: string
+          oprid?: string | null
+          payload?: Json | null
+          response?: Json | null
+          status?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meter_commands_meter_id_fkey"
+            columns: ["meter_id"]
+            isOneToOne: false
+            referencedRelation: "meters"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      meter_connections: {
+        Row: {
+          connected_at: string
+          disconnected_at: string | null
+          id: string
+          is_active: boolean
+          meter_id: string
+          user_id: string
+        }
+        Insert: {
+          connected_at?: string
+          disconnected_at?: string | null
+          id?: string
+          is_active?: boolean
+          meter_id: string
+          user_id: string
+        }
+        Update: {
+          connected_at?: string
+          disconnected_at?: string | null
+          id?: string
+          is_active?: boolean
+          meter_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meter_connections_meter_id_fkey"
+            columns: ["meter_id"]
+            isOneToOne: false
+            referencedRelation: "meters"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       meter_link_requests: {
         Row: {
           id: string
@@ -40,6 +212,107 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      meter_readings: {
+        Row: {
+          current_amps: number | null
+          energy_kwh: number | null
+          frequency_hz: number | null
+          id: string
+          meter_id: string
+          power_factor: number | null
+          power_watts: number | null
+          raw_payload: Json | null
+          recorded_at: string
+          voltage: number | null
+        }
+        Insert: {
+          current_amps?: number | null
+          energy_kwh?: number | null
+          frequency_hz?: number | null
+          id?: string
+          meter_id: string
+          power_factor?: number | null
+          power_watts?: number | null
+          raw_payload?: Json | null
+          recorded_at?: string
+          voltage?: number | null
+        }
+        Update: {
+          current_amps?: number | null
+          energy_kwh?: number | null
+          frequency_hz?: number | null
+          id?: string
+          meter_id?: string
+          power_factor?: number | null
+          power_watts?: number | null
+          raw_payload?: Json | null
+          recorded_at?: string
+          voltage?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meter_readings_meter_id_fkey"
+            columns: ["meter_id"]
+            isOneToOne: false
+            referencedRelation: "meters"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      meter_transfers: {
+        Row: {
+          amount_kwh: number
+          connection_id: string | null
+          created_at: string
+          id: string
+          meter_balance_after: number
+          meter_balance_before: number
+          meter_id: string
+          user_id: string
+          wallet_balance_after: number
+          wallet_balance_before: number
+        }
+        Insert: {
+          amount_kwh: number
+          connection_id?: string | null
+          created_at?: string
+          id?: string
+          meter_balance_after?: number
+          meter_balance_before?: number
+          meter_id: string
+          user_id: string
+          wallet_balance_after?: number
+          wallet_balance_before?: number
+        }
+        Update: {
+          amount_kwh?: number
+          connection_id?: string | null
+          created_at?: string
+          id?: string
+          meter_balance_after?: number
+          meter_balance_before?: number
+          meter_id?: string
+          user_id?: string
+          wallet_balance_after?: number
+          wallet_balance_before?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meter_transfers_connection_id_fkey"
+            columns: ["connection_id"]
+            isOneToOne: false
+            referencedRelation: "meter_connections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meter_transfers_meter_id_fkey"
+            columns: ["meter_id"]
+            isOneToOne: false
+            referencedRelation: "meters"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       meters: {
         Row: {
@@ -125,6 +398,45 @@ export type Database = {
         }
         Relationships: []
       }
+      payment_splits: {
+        Row: {
+          commission_amount_kes: number
+          commission_percent: number
+          created_at: string
+          forwarded: boolean
+          id: string
+          kplc_amount_kes: number
+          kplc_payment_id: string | null
+          original_amount_kes: number
+          transaction_id: string
+          user_id: string
+        }
+        Insert: {
+          commission_amount_kes?: number
+          commission_percent?: number
+          created_at?: string
+          forwarded?: boolean
+          id?: string
+          kplc_amount_kes?: number
+          kplc_payment_id?: string | null
+          original_amount_kes?: number
+          transaction_id: string
+          user_id: string
+        }
+        Update: {
+          commission_amount_kes?: number
+          commission_percent?: number
+          created_at?: string
+          forwarded?: boolean
+          id?: string
+          kplc_amount_kes?: number
+          kplc_payment_id?: string | null
+          original_amount_kes?: number
+          transaction_id?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -161,6 +473,27 @@ export type Database = {
           pin_hash?: string | null
           updated_at?: string
           user_id?: string
+        }
+        Relationships: []
+      }
+      system_settings: {
+        Row: {
+          description: string | null
+          key: string
+          updated_at: string
+          value: string
+        }
+        Insert: {
+          description?: string | null
+          key: string
+          updated_at?: string
+          value: string
+        }
+        Update: {
+          description?: string | null
+          key?: string
+          updated_at?: string
+          value?: string
         }
         Relationships: []
       }
@@ -214,6 +547,27 @@ export type Database = {
           status?: string
           type?: string
           updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      user_roles: {
+        Row: {
+          created_at: string
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
           user_id?: string
         }
         Relationships: []
@@ -306,7 +660,18 @@ export type Database = {
         Args: { p_amount_kwh: number; p_user_id: string }
         Returns: number
       }
+      disconnect_from_meter: {
+        Args: { p_connection_id: string }
+        Returns: undefined
+      }
       has_pin: { Args: never; Returns: boolean }
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
       insert_notification: {
         Args: {
           p_body: string
@@ -326,7 +691,7 @@ export type Database = {
       verify_pin: { Args: { p_pin_hash: string }; Returns: boolean }
     }
     Enums: {
-      [_ in never]: never
+      app_role: "admin" | "moderator" | "user"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -453,6 +818,8 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ["admin", "moderator", "user"],
+    },
   },
 } as const
