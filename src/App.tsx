@@ -75,6 +75,8 @@ const App = () => {
                 <Route path="/auth/pin" element={<PinSetup />} />
                 <Route path="/auth/confirm-email" element={<EmailConfirmWait />} />
                 <Route path="/auth/forgot-pin" element={<ForgotPin />} />
+                <Route path="/auth/forgot-password" element={<ForgotPassword />} />
+                <Route path="/reset-password" element={<ResetPassword />} />
 
                 {/* Protected app routes */}
                 <Route path="/" element={<AuthGuard><Home /></AuthGuard>} />
@@ -85,6 +87,7 @@ const App = () => {
                 <Route path="/profile" element={<AuthGuard><Profile /></AuthGuard>} />
                 <Route path="/meters" element={<AuthGuard><Meters /></AuthGuard>} />
                 <Route path="/notifications" element={<AuthGuard><Notifications /></AuthGuard>} />
+                <Route path="/faq" element={<AuthGuard><FAQ /></AuthGuard>} />
                 <Route path="/install" element={<Install />} />
 
                 {/* Admin auth */}
