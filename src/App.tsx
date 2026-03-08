@@ -29,6 +29,7 @@ import AdminMeters from "./pages/admin/AdminMeters";
 import AdminTransactions from "./pages/admin/AdminTransactions";
 import AdminSettings from "./pages/admin/AdminSettings";
 import AdminPlaceholder from "./pages/admin/AdminPlaceholder";
+import AdminLogin from "./pages/admin/AdminLogin";
 import AdminGuard from "./components/AdminGuard";
 import IoTHub from "./pages/IoTHub";
 
