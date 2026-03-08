@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, TrendingUp, TrendingDown, Zap, Flame, Loader2 } from "lucide-react";
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Area, AreaChart } from "recharts";
+import { ArrowLeft, TrendingUp, TrendingDown, Zap, Flame, Loader2, DollarSign, Calendar, BarChart3 } from "lucide-react";
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Area, AreaChart, PieChart, Pie, Cell, LineChart, Line } from "recharts";
 import BottomNav from "@/components/BottomNav";
 import LiveTelemetry from "@/components/LiveTelemetry";
 import AIInsights from "@/components/AIInsights";
@@ -10,13 +10,18 @@ import { useQuery } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
 
 const KES_PER_KWH = 24;
+const PIE_COLORS = ["hsl(168, 100%, 45%)", "hsl(280, 70%, 55%)", "hsl(35, 90%, 55%)", "hsl(0, 70%, 55%)"];
 
 const CustomTooltip = ({ active, payload, label }: any) => {
   if (active && payload?.length) {
     return (
       <div className="glass-card-elevated rounded-xl px-3 py-2 border border-primary/20">
         <p className="text-[10px] text-muted-foreground font-mono uppercase">{label}</p>
-        <p className="text-sm font-bold font-mono text-primary neon-text">{payload[0].value} kWh</p>
+        {payload.map((p: any, i: number) => (
+          <p key={i} className="text-sm font-bold font-mono text-primary neon-text">
+            {typeof p.value === "number" ? p.value.toFixed(1) : p.value} {p.name === "cost" ? "KES" : p.dataKey === "kw" ? "kW" : "kWh"}
+          </p>
+        ))}
       </div>
     );
   }
@@ -30,7 +35,7 @@ const fetchRecentTransactions = async () => {
   threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
   const { data, error } = await supabase
     .from("transactions")
-    .select("amount_kwh, created_at")
+    .select("amount_kwh, amount_kes, type, created_at")
     .eq("status", "completed")
     .gte("created_at", threeMonthsAgo.toISOString())
     .order("created_at", { ascending: true });
@@ -38,19 +43,19 @@ const fetchRecentTransactions = async () => {
   return data ?? [];
 };
 
-function computeAnalytics(rows: { amount_kwh: number; created_at: string }[]) {
+function computeAnalytics(rows: { amount_kwh: number; amount_kes: number; type: string; created_at: string }[]) {
   const now = new Date();
   const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
   const monthNames = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
   const hourLabels = ["12AM","1AM","2AM","3AM","4AM","5AM","6AM","7AM","8AM","9AM","10AM","11AM","12PM","1PM","2PM","3PM","4PM","5PM","6PM","7PM","8PM","9PM","10PM","11PM"];
 
-  const dayBuckets: Record<string, number> = {};
+  const dayBuckets: Record<string, { kwh: number; kes: number }> = {};
   for (let i = 6; i >= 0; i--) {
     const d = new Date(); d.setDate(d.getDate() - i);
-    dayBuckets[d.toISOString().slice(0, 10)] = 0;
+    dayBuckets[d.toISOString().slice(0, 10)] = { kwh: 0, kes: 0 };
   }
 
-  const weekBuckets = [0, 0, 0, 0];
+  const weekBuckets = [{ kwh: 0, kes: 0 }, { kwh: 0, kes: 0 }, { kwh: 0, kes: 0 }, { kwh: 0, kes: 0 }];
   const weekBounds: [Date, Date][] = [];
   for (let w = 3; w >= 0; w--) {
     const s = new Date(now); s.setDate(s.getDate() - (w + 1) * 7);
@@ -58,10 +63,10 @@ function computeAnalytics(rows: { amount_kwh: number; created_at: string }[]) {
     weekBounds.push([s, e]);
   }
 
-  const monthBuckets: Record<string, number> = {};
+  const monthBuckets: Record<string, { kwh: number; kes: number }> = {};
   for (let m = 2; m >= 0; m--) {
     const d = new Date(); d.setMonth(d.getMonth() - m);
-    monthBuckets[`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`] = 0;
+    monthBuckets[`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`] = { kwh: 0, kes: 0 };
   }
 
   const todayStr = now.toISOString().slice(0, 10);
@@ -71,30 +76,47 @@ function computeAnalytics(rows: { amount_kwh: number; created_at: string }[]) {
   const thisMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
   const lastMonth = new Date(now); lastMonth.setMonth(lastMonth.getMonth() - 1);
   const lastMonthKey = `${lastMonth.getFullYear()}-${String(lastMonth.getMonth() + 1).padStart(2, "0")}`;
-  let thisMonthTotal = 0, lastMonthTotal = 0;
+  let thisMonthTotal = 0, lastMonthTotal = 0, thisMonthKes = 0;
+
+  // Type breakdown
+  const typeCounts: Record<string, number> = {};
 
   for (const row of rows) {
     const kwh = Number(row.amount_kwh);
+    const kes = Number(row.amount_kes);
     const dateStr = row.created_at.slice(0, 10);
     const monthKey = row.created_at.slice(0, 7);
     const t = new Date(row.created_at);
-    if (dayBuckets[dateStr] !== undefined) dayBuckets[dateStr] += kwh;
-    for (let w = 0; w < 4; w++) {
-      if (t >= weekBounds[w][0] && t < weekBounds[w][1]) { weekBuckets[w] += kwh; break; }
+
+    typeCounts[row.type] = (typeCounts[row.type] || 0) + 1;
+
+    if (dayBuckets[dateStr]) {
+      dayBuckets[dateStr].kwh += kwh;
+      dayBuckets[dateStr].kes += kes;
     }
-    if (monthBuckets[monthKey] !== undefined) monthBuckets[monthKey] += kwh;
+    for (let w = 0; w < 4; w++) {
+      if (t >= weekBounds[w][0] && t < weekBounds[w][1]) {
+        weekBuckets[w].kwh += kwh;
+        weekBuckets[w].kes += kes;
+        break;
+      }
+    }
+    if (monthBuckets[monthKey]) {
+      monthBuckets[monthKey].kwh += kwh;
+      monthBuckets[monthKey].kes += kes;
+    }
     if (dateStr === todayStr) hourBuckets[t.getHours()] += kwh;
-    if (monthKey === thisMonthKey) thisMonthTotal += kwh;
+    if (monthKey === thisMonthKey) { thisMonthTotal += kwh; thisMonthKes += kes; }
     else if (monthKey === lastMonthKey) lastMonthTotal += kwh;
   }
 
-  const dailyData = Object.entries(dayBuckets).map(([date, kwh]) => ({
-    day: dayNames[new Date(date).getDay()], date, kwh: +kwh.toFixed(2),
+  const dailyData = Object.entries(dayBuckets).map(([date, v]) => ({
+    day: dayNames[new Date(date).getDay()], date, kwh: +v.kwh.toFixed(2), kes: +v.kes.toFixed(0),
   }));
-  const weeklyData = weekBuckets.map((kwh, i) => ({ week: `W${i + 1}`, kwh: +kwh.toFixed(2) }));
-  const monthlyData = Object.entries(monthBuckets).map(([key, kwh]) => {
+  const weeklyData = weekBuckets.map((v, i) => ({ week: `W${i + 1}`, kwh: +v.kwh.toFixed(2), kes: +v.kes.toFixed(0) }));
+  const monthlyData = Object.entries(monthBuckets).map(([key, v]) => {
     const m = parseInt(key.split("-")[1]);
-    return { month: monthNames[m - 1], kwh: +kwh.toFixed(2), cost: +(kwh * KES_PER_KWH).toFixed(0) };
+    return { month: monthNames[m - 1], kwh: +v.kwh.toFixed(2), cost: +v.kes.toFixed(0) };
   });
   const hourlyData = [];
   for (let h = 6; h <= 23; h++) {
@@ -104,7 +126,12 @@ function computeAnalytics(rows: { amount_kwh: number; created_at: string }[]) {
   const dailyAvg = now.getDate() > 0 ? thisMonthTotal / now.getDate() : 0;
   const changePct = lastMonthTotal > 0 ? Math.round(((thisMonthTotal - lastMonthTotal) / lastMonthTotal) * 100) : 0;
 
-  return { dailyData, weeklyData, monthlyData, hourlyData, thisMonth: +thisMonthTotal.toFixed(1), dailyAvg: +dailyAvg.toFixed(1), changePct };
+  const typeData = Object.entries(typeCounts).map(([name, value]) => ({
+    name: name.replace("_", " "),
+    value,
+  }));
+
+  return { dailyData, weeklyData, monthlyData, hourlyData, thisMonth: +thisMonthTotal.toFixed(1), thisMonthKes, dailyAvg: +dailyAvg.toFixed(1), changePct, typeData, totalTxns: rows.length };
 }
 
 const Analytics = () => {
@@ -127,7 +154,7 @@ const Analytics = () => {
     );
   }
 
-  const { dailyData, weeklyData, monthlyData, hourlyData, thisMonth, dailyAvg, changePct } = analytics;
+  const { dailyData, weeklyData, monthlyData, hourlyData, thisMonth, thisMonthKes, dailyAvg, changePct, typeData, totalTxns } = analytics;
 
   return (
     <div className="min-h-screen bg-background pb-28 cyber-grid noise-overlay relative">
@@ -144,13 +171,14 @@ const Analytics = () => {
 
       <div className="px-5 space-y-5">
         {/* Summary cards */}
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-2 gap-3">
           {[
-            { label: "THIS MONTH", val: thisMonth.toFixed(1), unit: "kWh", icon: Zap, color: "text-primary", glow: "glow-cyan", border: "border-primary/20" },
-            { label: "VS LAST", val: `${changePct > 0 ? "+" : ""}${changePct}%`, unit: "", icon: changePct >= 0 ? TrendingUp : TrendingDown, color: "text-accent", glow: "glow-purple", border: "border-accent/20" },
-            { label: "AVG DAILY", val: dailyAvg.toFixed(1), unit: "kWh", icon: TrendingDown, color: "text-primary", glow: "glow-cyan", border: "border-primary/20" },
-          ].map(({ label, val, unit, icon: Icon, color, glow, border }) => (
-            <div key={label} className={cn("glass-card-elevated rounded-xl p-3.5 border", border, glow)}>
+            { label: "THIS MONTH", val: thisMonth.toFixed(1), unit: "kWh", icon: Zap, color: "text-primary", border: "border-primary/20" },
+            { label: "VS LAST", val: `${changePct > 0 ? "+" : ""}${changePct}%`, unit: "", icon: changePct >= 0 ? TrendingUp : TrendingDown, color: "text-accent", border: "border-accent/20" },
+            { label: "AVG DAILY", val: dailyAvg.toFixed(1), unit: "kWh", icon: Calendar, color: "text-primary", border: "border-primary/20" },
+            { label: "SPENT", val: `${thisMonthKes.toLocaleString()}`, unit: "KES", icon: DollarSign, color: "text-accent", border: "border-accent/20" },
+          ].map(({ label, val, unit, icon: Icon, color, border }) => (
+            <div key={label} className={cn("glass-card-elevated rounded-xl p-3.5 border", border)}>
               <div className={cn("w-8 h-8 rounded-lg flex items-center justify-center mb-2.5 bg-secondary/50 border", border)}>
                 <Icon className={cn("w-4 h-4", color)} />
               </div>
@@ -160,6 +188,35 @@ const Analytics = () => {
           ))}
         </div>
 
+        {/* Transaction type pie */}
+        {typeData.length > 1 && (
+          <div className="glass-card-elevated rounded-2xl p-4 border border-border">
+            <div className="flex items-center gap-2 mb-2">
+              <BarChart3 className="w-4 h-4 text-primary" />
+              <p className="text-xs font-mono font-bold text-foreground uppercase">TRANSACTION TYPES</p>
+              <span className="text-[9px] text-muted-foreground font-mono ml-auto">{totalTxns} total</span>
+            </div>
+            <ResponsiveContainer width="100%" height={120}>
+              <PieChart>
+                <Pie data={typeData} cx="50%" cy="50%" innerRadius={25} outerRadius={48} dataKey="value" paddingAngle={3}>
+                  {typeData.map((_, i) => (
+                    <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
+                  ))}
+                </Pie>
+                <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8, color: "hsl(var(--foreground))", fontSize: 11 }} />
+              </PieChart>
+            </ResponsiveContainer>
+            <div className="flex flex-wrap gap-3 justify-center">
+              {typeData.map((d, i) => (
+                <span key={d.name} className="flex items-center gap-1 text-[9px] text-muted-foreground font-mono capitalize">
+                  <span className="w-2 h-2 rounded-full" style={{ backgroundColor: PIE_COLORS[i % PIE_COLORS.length] }} />
+                  {d.name} ({d.value})
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Tab selector */}
         <div className="flex bg-secondary/30 rounded-xl p-1 gap-1 border border-border">
           {(["daily", "weekly", "monthly"] as Tab[]).map((t) => (
@@ -168,7 +225,7 @@ const Analytics = () => {
               onClick={() => setTab(t)}
               className={cn(
                 "flex-1 py-2.5 rounded-lg text-xs font-mono font-medium uppercase transition-all duration-300",
-                tab === t ? "bg-primary text-primary-foreground font-bold glow-cyan" : "text-muted-foreground hover:text-foreground"
+                tab === t ? "bg-primary text-primary-foreground font-bold" : "text-muted-foreground hover:text-foreground"
               )}
             >
               {t}
@@ -231,9 +288,9 @@ const Analytics = () => {
                       <span className="text-primary font-mono font-bold neon-text">{m.kwh.toFixed(1)} kWh</span>
                     </div>
                     <div className="h-2.5 bg-secondary/30 rounded-full overflow-hidden border border-border">
-                      <div className="h-full bg-primary rounded-full transition-all duration-1000 glow-cyan" style={{ width: `${bar}%` }} />
+                      <div className="h-full bg-primary rounded-full transition-all duration-1000" style={{ width: `${bar}%` }} />
                     </div>
-                    <p className="text-[10px] text-muted-foreground font-mono mt-1.5">KES {((m.kwh || 0) * 20.43).toLocaleString(undefined, { maximumFractionDigits: 0 })}</p>
+                    <p className="text-[10px] text-muted-foreground font-mono mt-1.5">KES {m.cost.toLocaleString()}</p>
                   </div>
                 );
               }) : (
@@ -243,10 +300,39 @@ const Analytics = () => {
           )}
         </div>
 
+        {/* Spending Trend (KES) */}
+        <div className="glass-card-elevated rounded-2xl p-5 border border-border hud-corners">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-10 h-10 rounded-xl bg-accent/10 border border-accent/20 flex items-center justify-center">
+              <DollarSign className="w-5 h-5 text-accent" />
+            </div>
+            <div>
+              <p className="text-sm font-bold font-mono text-foreground">SPENDING TREND</p>
+              <p className="text-[9px] text-muted-foreground font-mono">DAILY COST (KES) — PAST 7 DAYS</p>
+            </div>
+          </div>
+          <ResponsiveContainer width="100%" height={140}>
+            <LineChart data={dailyData}>
+              <CartesianGrid strokeDasharray="3 3" stroke="hsl(230, 20%, 14%)" vertical={false} />
+              <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{ fill: "hsl(230, 12%, 50%)", fontSize: 9, fontFamily: "JetBrains Mono" }} />
+              <YAxis axisLine={false} tickLine={false} tick={{ fill: "hsl(230, 12%, 50%)", fontSize: 9, fontFamily: "JetBrains Mono" }} />
+              <Tooltip content={({ active, payload, label }) =>
+                active && payload?.length ? (
+                  <div className="glass-card-elevated rounded-xl px-3 py-2 border border-accent/20">
+                    <p className="text-[10px] text-muted-foreground font-mono">{label}</p>
+                    <p className="text-sm font-bold font-mono text-accent">KES {payload[0].value?.toLocaleString()}</p>
+                  </div>
+                ) : null
+              } />
+              <Line type="monotone" dataKey="kes" stroke="hsl(var(--accent))" strokeWidth={2.5} dot={{ r: 4, fill: "hsl(var(--accent))" }} />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+
         {/* Today's Load Curve */}
         <div className="glass-card-elevated rounded-2xl p-5 border border-border hud-corners">
           <div className="flex items-center gap-3 mb-4">
-            <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center glow-amber">
+            <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center">
               <Flame className="w-5 h-5 text-amber-500" />
             </div>
             <div>
