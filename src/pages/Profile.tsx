@@ -7,7 +7,7 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import BottomNav from "@/components/BottomNav";
-import { useTheme } from "@/components/ThemeProvider";
+import { useTheme, COLOR_THEMES } from "@/components/ThemeProvider";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
