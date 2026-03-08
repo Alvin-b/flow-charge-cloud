@@ -5,15 +5,14 @@ const SplashScreen = () => {
   const [phase, setPhase] = useState(0);
 
   useEffect(() => {
-    const t1 = setTimeout(() => setPhase(1), 400);
-    const t2 = setTimeout(() => setPhase(2), 900);
-    const t3 = setTimeout(() => setPhase(3), 1600);
+    const t1 = setTimeout(() => setPhase(1), 200);
+    const t2 = setTimeout(() => setPhase(2), 500);
+    const t3 = setTimeout(() => setPhase(3), 900);
     return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); };
   }, []);
 
   return (
     <div className="fixed inset-0 flex flex-col items-center justify-center bg-background overflow-hidden">
-      {/* Soft background circles */}
       <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 rounded-full bg-primary/5 blur-3xl" />
       <div className="absolute bottom-1/3 left-1/3 w-48 h-48 rounded-full bg-accent/5 blur-3xl" />
 
@@ -22,7 +21,7 @@ const SplashScreen = () => {
         style={{
           opacity: phase >= 1 ? 1 : 0,
           transform: phase >= 1 ? "translateY(0)" : "translateY(20px)",
-          transition: "all 0.6s cubic-bezier(0.16, 1, 0.3, 1)",
+          transition: "all 0.4s cubic-bezier(0.16, 1, 0.3, 1)",
         }}
       >
         <div className="relative">
@@ -36,7 +35,7 @@ const SplashScreen = () => {
           style={{
             opacity: phase >= 2 ? 1 : 0,
             transform: phase >= 2 ? "translateY(0)" : "translateY(8px)",
-            transition: "all 0.4s ease-out 0.1s",
+            transition: "all 0.3s ease-out",
           }}
         >
           <h1 className="text-3xl font-extrabold tracking-tight text-foreground">
@@ -52,7 +51,7 @@ const SplashScreen = () => {
         className="absolute bottom-16 flex flex-col items-center gap-3"
         style={{
           opacity: phase >= 3 ? 1 : 0,
-          transition: "opacity 0.4s ease-out",
+          transition: "opacity 0.3s ease-out",
         }}
       >
         <div className="flex gap-1.5">
@@ -61,8 +60,8 @@ const SplashScreen = () => {
               key={i}
               className="w-1.5 h-1.5 rounded-full bg-primary"
               style={{
-                animation: "pulseCyan 1.2s ease-in-out infinite",
-                animationDelay: `${i * 0.2}s`,
+                animation: "pulseCyan 1s ease-in-out infinite",
+                animationDelay: `${i * 0.15}s`,
               }}
             />
           ))}
