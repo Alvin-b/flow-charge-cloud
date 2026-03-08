@@ -53,6 +53,9 @@ async function mqttPublish(topic: string, payload: Record<string, unknown>): Pro
     return false;
   }
 
+  console.log(`[MQTT DEBUG] URL: ${MQTT_HTTP_API_URL}`);
+  console.log(`[MQTT DEBUG] API_KEY length: ${MQTT_HTTP_API_KEY.length}, starts with: ${MQTT_HTTP_API_KEY.substring(0, 10)}...`);
+
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   if (MQTT_HTTP_API_KEY) {
     headers["Authorization"] = `Basic ${MQTT_HTTP_API_KEY}`;
