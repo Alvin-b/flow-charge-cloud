@@ -278,6 +278,45 @@ export type Database = {
           },
         ]
       }
+      meter_registry: {
+        Row: {
+          claimed_at: string | null
+          claimed_by: string | null
+          created_at: string
+          id: string
+          is_claimed: boolean
+          mqtt_meter_id: string
+          name: string | null
+          notes: string | null
+          property_name: string | null
+          registered_by: string | null
+        }
+        Insert: {
+          claimed_at?: string | null
+          claimed_by?: string | null
+          created_at?: string
+          id?: string
+          is_claimed?: boolean
+          mqtt_meter_id: string
+          name?: string | null
+          notes?: string | null
+          property_name?: string | null
+          registered_by?: string | null
+        }
+        Update: {
+          claimed_at?: string | null
+          claimed_by?: string | null
+          created_at?: string
+          id?: string
+          is_claimed?: boolean
+          mqtt_meter_id?: string
+          name?: string | null
+          notes?: string | null
+          property_name?: string | null
+          registered_by?: string | null
+        }
+        Relationships: []
+      }
       meter_transfers: {
         Row: {
           amount_kwh: number
