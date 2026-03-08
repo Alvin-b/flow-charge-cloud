@@ -28,10 +28,15 @@ import AdminUsers from "./pages/admin/AdminUsers";
 import AdminMeters from "./pages/admin/AdminMeters";
 import AdminTransactions from "./pages/admin/AdminTransactions";
 import AdminSettings from "./pages/admin/AdminSettings";
-import AdminPlaceholder from "./pages/admin/AdminPlaceholder";
 import AdminLogin from "./pages/admin/AdminLogin";
 import AdminGuard from "./components/AdminGuard";
 import AdminWallets from "./pages/admin/AdminWallets";
+import AdminAnalytics from "./pages/admin/AdminAnalytics";
+import AdminActivityLog from "./pages/admin/AdminActivityLog";
+import AdminMeterCommands from "./pages/admin/AdminMeterCommands";
+import AdminKPLC from "./pages/admin/AdminKPLC";
+import AdminNotificationsManager from "./pages/admin/AdminNotificationsManager";
+import AdminSecurity from "./pages/admin/AdminSecurity";
 import IoTHub from "./pages/IoTHub";
 
 const queryClient = new QueryClient();
@@ -89,13 +94,13 @@ const App = () => {
                 <Route path="/admin/recharges" element={<AdminGuard><AdminTransactions /></AdminGuard>} />
                 <Route path="/admin/transfers" element={<AdminGuard><AdminTransactions /></AdminGuard>} />
                 <Route path="/admin/settings" element={<AdminGuard><AdminSettings /></AdminGuard>} />
-                <Route path="/admin/analytics" element={<AdminGuard><AdminPlaceholder title="Analytics" description="Revenue charts, usage trends, and system metrics" /></AdminGuard>} />
-                <Route path="/admin/activity" element={<AdminGuard><AdminPlaceholder title="Activity Log" description="Audit trail of admin and system actions" /></AdminGuard>} />
+                <Route path="/admin/analytics" element={<AdminGuard><AdminAnalytics /></AdminGuard>} />
+                <Route path="/admin/activity" element={<AdminGuard><AdminActivityLog /></AdminGuard>} />
                 <Route path="/admin/wallets" element={<AdminGuard><AdminWallets /></AdminGuard>} />
-                <Route path="/admin/meter-commands" element={<AdminGuard><AdminPlaceholder title="Meter Commands" description="MQTT command history and remote control" /></AdminGuard>} />
-                <Route path="/admin/kplc" element={<AdminGuard><AdminPlaceholder title="KPLC Payments" description="B2B payment pool status and history" /></AdminGuard>} />
-                <Route path="/admin/notifications" element={<AdminGuard><AdminPlaceholder title="Notifications" description="Send broadcast notifications to users" /></AdminGuard>} />
-                <Route path="/admin/security" element={<AdminGuard><AdminPlaceholder title="Security" description="Rate limits, audit logs, and access controls" /></AdminGuard>} />
+                <Route path="/admin/meter-commands" element={<AdminGuard><AdminMeterCommands /></AdminGuard>} />
+                <Route path="/admin/kplc" element={<AdminGuard><AdminKPLC /></AdminGuard>} />
+                <Route path="/admin/notifications" element={<AdminGuard><AdminNotificationsManager /></AdminGuard>} />
+                <Route path="/admin/security" element={<AdminGuard><AdminSecurity /></AdminGuard>} />
 
                 <Route path="*" element={<NotFound />} />
               </Routes>
