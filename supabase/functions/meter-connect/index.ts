@@ -4,8 +4,58 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
+    "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
+
+const MQTT_HTTP_API_URL = Deno.env.get("MQTT_HTTP_API_URL") || "";
+const MQTT_HTTP_API_KEY = Deno.env.get("MQTT_HTTP_API_KEY") || "";
+
+// ── MQTT Helpers ─────────────────────────────────────────────
+
+function last8(meterId: string): string {
+  return meterId.slice(-8);
+}
+
+async function mqttPublish(topic: string, payload: Record<string, unknown>): Promise<boolean> {
+  if (!MQTT_HTTP_API_URL) return false;
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (MQTT_HTTP_API_KEY) headers["Authorization"] = `Basic ${MQTT_HTTP_API_KEY}`;
+
+  try {
+    const res = await fetch(MQTT_HTTP_API_URL, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ topic, payload: JSON.stringify(payload), qos: 1, retain: false }),
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      console.error(`MQTT publish failed [${res.status}]: ${text}`);
+      return false;
+    }
+    await res.text();
+    console.log(`[MQTT] Published to ${topic}`);
+    return true;
+  } catch (err) {
+    console.error("MQTT publish error:", err);
+    return false;
+  }
+}
+
+async function sendRelayOn(mqttMeterId: string): Promise<boolean> {
+  const oprid = crypto.randomUUID().replace(/-/g, "");
+  const topic = `MQTT_TELECTRL_${last8(mqttMeterId)}`;
+  console.log(`⚡ RELAY ON: ${mqttMeterId} → ${topic}`);
+  return await mqttPublish(topic, { do1: "1", oprid });
+}
+
+async function sendRelayOff(mqttMeterId: string): Promise<boolean> {
+  const oprid = crypto.randomUUID().replace(/-/g, "");
+  const topic = `MQTT_TELECTRL_${last8(mqttMeterId)}`;
+  console.log(`⚡ RELAY OFF: ${mqttMeterId} → ${topic}`);
+  return await mqttPublish(topic, { do1: "0", oprid });
+}
+
+// ── Main handler ─────────────────────────────────────────────
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -27,10 +77,7 @@ serve(async (req) => {
   );
 
   const token = authHeader.replace("Bearer ", "");
-  const {
-    data: { user },
-    error: userError,
-  } = await supabase.auth.getUser(token);
+  const { data: { user }, error: userError } = await supabase.auth.getUser(token);
 
   if (userError || !user) {
     return new Response(JSON.stringify({ error: "Unauthorized" }), {
@@ -49,23 +96,22 @@ serve(async (req) => {
   );
 
   try {
-    // Connect to a meter by meter_code
+    // ── Connect to meter by scanning MN (mqtt_meter_id) ──
     if (action === "connect" && req.method === "POST") {
       const body = await req.json();
       const { meter_code, connection_type } = body;
 
       if (!meter_code || typeof meter_code !== "string" || meter_code.trim().length === 0 || meter_code.trim().length > 50) {
         return new Response(
-          JSON.stringify({ error: "Valid meter_code is required (max 50 chars)" }),
+          JSON.stringify({ error: "Valid meter number is required" }),
           { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
 
-      // Validate connection_type if provided
       const validTypes = ["manual_code", "qr_scan", "nfc"];
       const connType = connection_type && validTypes.includes(connection_type) ? connection_type : "manual_code";
 
-      // Rate limit: 3 connect attempts per minute
+      // Rate limit
       const { data: canProceed } = await serviceSupabase.rpc('check_rate_limit', {
         p_user_id: userId,
         p_action: 'meter_connect',
@@ -80,7 +126,7 @@ serve(async (req) => {
         );
       }
 
-      // Check if user already has an active connection
+      // Check existing active connection
       const { data: existingConnection } = await supabase
         .from("meter_connections")
         .select("id, meter_id")
@@ -90,33 +136,23 @@ serve(async (req) => {
 
       if (existingConnection) {
         return new Response(
-          JSON.stringify({
-            error:
-              "You already have an active meter connection. Disconnect first.",
-          }),
-          {
-            status: 400,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          }
+          JSON.stringify({ error: "You already have an active meter connection. Disconnect first." }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
 
-      // Find the meter by code
+      // Find meter by mqtt_meter_id (the MN scanned/entered by user)
+      const trimmedCode = meter_code.trim();
       const { data: meter, error: meterError } = await serviceSupabase
         .from("meters")
         .select("*")
-        .eq("meter_code", meter_code.trim())
+        .eq("mqtt_meter_id", trimmedCode)
         .maybeSingle();
 
       if (meterError || !meter) {
         return new Response(
-          JSON.stringify({
-            error: "Meter not found. Check the code and try again.",
-          }),
-          {
-            status: 404,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          }
+          JSON.stringify({ error: "Meter not found. Check the meter number and try again." }),
+          { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
 
@@ -127,33 +163,25 @@ serve(async (req) => {
           maintenance: "This meter is under maintenance.",
         };
         return new Response(
-          JSON.stringify({
-            error: statusMsg[meter.status] || "Meter is not available.",
-          }),
-          {
-            status: 400,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          }
+          JSON.stringify({ error: statusMsg[meter.status] || "Meter is not available." }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
 
-      // Get user's wallet balance
+      // Get wallet balance
       const { data: wallet } = await supabase
         .from("wallets")
         .select("balance_kwh")
         .eq("user_id", userId)
         .maybeSingle();
 
-      // Create the connection
+      // Create connection
       const { data: connection, error: connError } = await supabase
         .from("meter_connections")
         .insert({
           user_id: userId,
           meter_id: meter.id,
-          connection_type: connType,
           is_active: true,
-          initial_wallet_balance: wallet?.balance_kwh ?? 0,
-          initial_meter_balance: meter.balance_kwh,
         })
         .select()
         .single();
@@ -161,21 +189,25 @@ serve(async (req) => {
       if (connError) {
         return new Response(
           JSON.stringify({ error: connError.message }),
-          {
-            status: 400,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          }
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
 
-      // Meter status is updated to 'connected' by the DB trigger
+      // Send MQTT relay ON if wallet has balance
+      if (wallet && wallet.balance_kwh > 0 && meter.mqtt_meter_id) {
+        const sent = await sendRelayOn(meter.mqtt_meter_id);
+        if (sent) {
+          await serviceSupabase.from("meters").update({ is_relay_on: true }).eq("id", meter.id);
+          console.log(`⚡ Relay ON sent for meter ${meter.mqtt_meter_id}`);
+        }
+      }
 
       // Notification
       await serviceSupabase.rpc("insert_notification", {
         p_user_id: userId,
         p_type: "meter",
         p_title: "Meter Connected",
-        p_body: `Connected to ${meter.name || "meter"} (${meter.meter_code}). Your wallet balance will power this meter.`,
+        p_body: `Connected to ${meter.name || "meter"} (${meter.mqtt_meter_id}). Your wallet balance will power this meter.`,
         p_icon: "⚡",
       });
 
@@ -186,20 +218,18 @@ serve(async (req) => {
           meter: {
             id: meter.id,
             name: meter.name,
-            meter_code: meter.meter_code,
+            mqtt_meter_id: meter.mqtt_meter_id,
             property_name: meter.property_name,
             balance_kwh: meter.balance_kwh,
             max_kwh: meter.max_kwh,
             status: "connected",
           },
         }),
-        {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    // Disconnect from a meter
+    // ── Disconnect from meter ──
     if (action === "disconnect" && req.method === "POST") {
       const body = await req.json();
       const { connection_id } = body;
@@ -207,128 +237,82 @@ serve(async (req) => {
       if (!connection_id) {
         return new Response(
           JSON.stringify({ error: "connection_id is required" }),
-          {
-            status: 400,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          }
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
 
-      // Get meter name before disconnecting for notification
-      const { data: connInfo } = await supabase
+      // Get meter info before disconnecting
+      const { data: connInfo } = await serviceSupabase
         .from("meter_connections")
-        .select("meter_id, meters(name, meter_code)")
+        .select("meter_id, meters(name, mqtt_meter_id)")
         .eq("id", connection_id)
+        .eq("user_id", userId)
         .single();
 
-      // Use the DB function for atomic disconnect
-      const { data, error } = await supabase.rpc("disconnect_from_meter", {
-        connection_uuid: connection_id,
+      // Disconnect via DB function
+      const { error } = await supabase.rpc("disconnect_from_meter", {
+        p_connection_id: connection_id,
       });
 
       if (error) {
         return new Response(
           JSON.stringify({ error: error.message }),
-          {
-            status: 400,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          }
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
 
+      // Send MQTT relay OFF
+      const meterData = (connInfo as any)?.meters;
+      if (meterData?.mqtt_meter_id) {
+        const sent = await sendRelayOff(meterData.mqtt_meter_id);
+        if (sent) {
+          await serviceSupabase.from("meters").update({ is_relay_on: false }).eq("mqtt_meter_id", meterData.mqtt_meter_id);
+          console.log(`🔌 Relay OFF sent for meter ${meterData.mqtt_meter_id}`);
+        }
+      }
+
       // Notification
-      const meterName = (connInfo as any)?.meters?.name || "meter";
+      const meterName = meterData?.name || "meter";
       await serviceSupabase.rpc("insert_notification", {
         p_user_id: userId,
         p_type: "meter",
         p_title: "Meter Disconnected",
-        p_body: `Disconnected from ${meterName}. Your wallet balance is preserved.`,
+        p_body: `Disconnected from ${meterName}. Power has been turned off. Your wallet balance is preserved.`,
         p_icon: "🔌",
       });
 
       return new Response(
         JSON.stringify({ success: true }),
-        {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    // Get user's active connection with meter details
+    // ── Get active connection ──
     if (action === "active") {
-      const { data, error } = await supabase.rpc("get_active_connection", {
-        user_uuid: userId,
-      });
+      const { data: activeConn } = await supabase
+        .from("meter_connections")
+        .select("*, meters(id, name, mqtt_meter_id, property_name, balance_kwh, max_kwh, status, is_relay_on, last_sync)")
+        .eq("user_id", userId)
+        .eq("is_active", true)
+        .maybeSingle();
 
       return new Response(
-        JSON.stringify({ connection: data?.[0] ?? null }),
-        {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
+        JSON.stringify({ connection: activeConn ?? null }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    // Get connection history
+    // ── Connection history ──
     if (action === "history") {
-      const { data, error } = await supabase
+      const { data } = await supabase
         .from("meter_connections")
-        .select("*, meters(name, meter_code, property_name)")
+        .select("*, meters(name, mqtt_meter_id, property_name)")
         .eq("user_id", userId)
         .order("connected_at", { ascending: false })
         .limit(20);
 
       return new Response(
         JSON.stringify({ connections: data ?? [] }),
-        {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
-    }
-
-    // Consumption stats for the active connection
-    if (action === "consumption_stats") {
-      const { data: activeConn } = await supabase.rpc("get_active_connection", {
-        user_uuid: userId,
-      });
-
-      const conn = activeConn?.[0];
-      if (!conn) {
-        return new Response(
-          JSON.stringify({ connected: false, total_consumed: 0, rate: 0, estimated_hours_remaining: 0 }),
-          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-
-      // Get meter rate
-      const { data: meter } = await serviceSupabase
-        .from("meters")
-        .select("consumption_rate_per_hour")
-        .eq("id", conn.meter_id)
-        .single();
-
-      const rate = parseFloat(meter?.consumption_rate_per_hour || "0");
-      const walletBalance = parseFloat(conn.wallet_balance || "0");
-      const estimatedHours = rate > 0 ? walletBalance / rate : 0;
-
-      // Total consumed for this connection
-      const { data: logs } = await supabase
-        .from("consumption_logs")
-        .select("kwh_consumed")
-        .eq("connection_id", conn.connection_id);
-
-      const totalConsumed = (logs || []).reduce(
-        (sum: number, r: any) => sum + parseFloat(r.kwh_consumed), 0
-      );
-
-      return new Response(
-        JSON.stringify({
-          connected: true,
-          total_consumed: parseFloat(totalConsumed.toFixed(2)),
-          rate_per_hour: rate,
-          wallet_balance: walletBalance,
-          estimated_hours_remaining: parseFloat(estimatedHours.toFixed(1)),
-          estimated_days_remaining: parseFloat((estimatedHours / 24).toFixed(1)),
-        }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
