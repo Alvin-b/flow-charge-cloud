@@ -284,6 +284,11 @@ export default function HomeCyberpunk({ data }: { data: HomeData }) {
           </div>
         </motion.div>
 
+        {/* AI Smart Tips */}
+        <motion.div variants={stagger.item}>
+          <AIInsights />
+        </motion.div>
+
         {/* System Status */}
         <motion.div variants={stagger.item} className="glass-card-elevated rounded-2xl p-4 hud-corners">
           <div className="flex items-start gap-3">
