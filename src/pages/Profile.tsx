@@ -18,7 +18,7 @@ import { IoTSettingsPanel } from "@/components/iot/IoTSettingsPanel";
 
 const Profile = () => {
   const navigate = useNavigate();
-  const { theme, toggleTheme } = useTheme();
+  const { mode, toggleMode, colorTheme, setColorTheme } = useTheme();
   const { profile, signOut, refreshProfile } = useAuth();
   const { toast } = useToast();
   const [biometric, setBiometric] = useState(() => localStorage.getItem("powerflow-biometric-enabled") === "true");
