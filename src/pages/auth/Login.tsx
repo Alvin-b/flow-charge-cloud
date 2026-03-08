@@ -92,6 +92,13 @@ const Login = () => {
             </div>
           </div>
 
+          <div className="flex justify-end">
+            <button onClick={() => navigate("/auth/forgot-password")}
+              className="text-xs text-primary hover:underline transition-colors">
+              Forgot password?
+            </button>
+          </div>
+
           <Button
             onClick={handleLogin}
             disabled={!canContinue || loading}

@@ -43,6 +43,8 @@ const Profile = () => {
   const [editPhone, setEditPhone] = useState("");
   const [editEmail, setEditEmail] = useState("");
   const [editSaving, setEditSaving] = useState(false);
+  const [avatarUploading, setAvatarUploading] = useState(false);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(profile?.avatar_url || null);
 
   useEffect(() => {
     const fetchStats = async () => {
@@ -61,11 +63,44 @@ const Profile = () => {
     }
   }, []);
 
+  useEffect(() => {
+    if (profile?.avatar_url) setAvatarUrl(profile.avatar_url);
+  }, [profile?.avatar_url]);
+
   const openEditProfile = () => {
     setEditName(profile?.full_name || "");
     setEditPhone(profile?.phone || "");
     setEditEmail(profile?.email || "");
     setEditOpen(true);
+  };
+
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !user) return;
+    if (file.size > 2 * 1024 * 1024) {
+      toast({ title: "File too large", description: "Max 2MB", variant: "destructive" });
+      return;
+    }
+    setAvatarUploading(true);
+    try {
+      const ext = file.name.split(".").pop() || "jpg";
+      const path = `${user.id}/avatar.${ext}`;
+      const { error: uploadErr } = await supabase.storage.from("avatars").upload(path, file, { upsert: true });
+      if (uploadErr) throw uploadErr;
+      const { data: urlData } = supabase.storage.from("avatars").getPublicUrl(path);
+      const publicUrl = urlData.publicUrl + "?t=" + Date.now();
+      // Update profile
+      await supabase.from("profiles").update({ avatar_url: publicUrl }).eq("user_id", user.id);
+      setAvatarUrl(publicUrl);
+      await refreshProfile();
+      Sounds.success();
+      toast({ title: "Photo updated!" });
+    } catch (err: any) {
+      Sounds.error();
+      toast({ title: "Upload failed", description: err.message, variant: "destructive" });
+    } finally {
+      setAvatarUploading(false);
+    }
   };
 
   const saveProfile = async () => {
@@ -137,12 +172,21 @@ const Profile = () => {
         <div className="glass-card-elevated rounded-3xl p-6 animate-fade-in-up">
           <div className="flex items-center gap-4">
             <div className="relative">
-              <div className="w-20 h-20 rounded-3xl bg-primary flex items-center justify-center text-2xl font-bold text-primary-foreground shadow-md">
-                {initials}
-              </div>
-              <button onClick={openEditProfile} className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-primary flex items-center justify-center border-2 border-background shadow-md">
-                <Edit3 className="w-3 h-3 text-primary-foreground" />
-              </button>
+              {avatarUrl ? (
+                <img src={avatarUrl} alt="Avatar" className="w-20 h-20 rounded-3xl object-cover shadow-md" />
+              ) : (
+                <div className="w-20 h-20 rounded-3xl bg-primary flex items-center justify-center text-2xl font-bold text-primary-foreground shadow-md">
+                  {initials}
+                </div>
+              )}
+              <label className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-primary flex items-center justify-center border-2 border-background shadow-md cursor-pointer">
+                {avatarUploading ? (
+                  <Loader2 className="w-3 h-3 text-primary-foreground animate-spin" />
+                ) : (
+                  <Edit3 className="w-3 h-3 text-primary-foreground" />
+                )}
+                <input type="file" accept="image/*" className="hidden" onChange={handleAvatarUpload} disabled={avatarUploading} />
+              </label>
               <div className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-success border-2 border-background" />
             </div>
             <div className="flex-1">
@@ -310,8 +354,8 @@ const Profile = () => {
         </Section>
 
         <Section title="Support">
-          <MenuItem icon={HelpCircle} label="FAQ & Help" subtitle="Common questions answered" />
-          <MenuItem icon={ExternalLink} label="Contact Support" subtitle="Get help from our team" />
+          <MenuItem icon={HelpCircle} label="FAQ & Help" subtitle="Common questions answered" onClick={() => navigate("/faq")} />
+          <MenuItem icon={ExternalLink} label="Contact Support" subtitle="Get help from our team" onClick={() => window.open("mailto:support@powerflow.co.ke")} />
         </Section>
 
         <Section title="Account">
