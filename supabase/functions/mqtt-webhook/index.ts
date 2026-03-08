@@ -103,17 +103,20 @@ async function handleRtData(sb: SB, p: Record<string, any>, meterId: string) {
   if (error) console.error("[RT_DATA] Insert error:", error);
   else console.log(`[RT_DATA] Stored for ${meterId}`);
 
-  // Also update meter_readings (legacy)
-  await sb.from("meter_readings").insert({
-    meter_id: meterId,
-    voltage: pv(p, "ua", "Ua"),
-    current_amps: pv(p, "ia", "Ia"),
-    power_watts: pv(p, "zyggl", "Zyggl") ? pv(p, "zyggl", "Zyggl") * 1000 : null,
-    energy_kwh: null,
-    frequency_hz: pv(p, "f", "F"),
-    power_factor: pv(p, "zglys", "Zglys") ?? pv(p, "pfa", "PFa"),
-    raw_payload: p,
-  }).then(({ error: e }) => { if (e) console.error("[RT_DATA] Legacy insert error:", e); });
+  // Legacy meter_readings table uses UUID meter_id — skip if not valid UUID
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  if (uuidRegex.test(meterId)) {
+    await sb.from("meter_readings").insert({
+      meter_id: meterId,
+      voltage: pv(p, "ua", "Ua"),
+      current_amps: pv(p, "ia", "Ia"),
+      power_watts: pv(p, "zyggl", "Zyggl") ? pv(p, "zyggl", "Zyggl") * 1000 : null,
+      energy_kwh: null,
+      frequency_hz: pv(p, "f", "F"),
+      power_factor: pv(p, "zglys", "Zglys") ?? pv(p, "pfa", "PFa"),
+      raw_payload: p,
+    }).then(({ error: e }) => { if (e) console.error("[RT_DATA] Legacy insert error:", e); });
+  }
 }
 
 // ── MQTT_ENY_NOW ─────────────────────────────────────────────
