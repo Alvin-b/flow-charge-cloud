@@ -71,22 +71,23 @@ type SB = ReturnType<typeof createClient>;
 // ── MQTT_RT_DATA ─────────────────────────────────────────────
 
 async function handleRtData(sb: SB, p: Record<string, any>, meterId: string) {
-  const readingTime = p.time ? parseCompereTime(p.time) : new Date();
+  const timeStr = p.time || p.Ts || p.ts;
+  const readingTime = timeStr ? parseCompereTime(timeStr) : new Date();
 
   const { error } = await sb.from("mqtt_meter_readings").insert({
     meter_id: meterId,
-    ua: p.ua, ub: p.ub, uc: p.uc,
-    ia: p.ia, ib: p.ib, ic: p.ic,
-    uab: p.uab, ubc: p.ubc, uca: p.uca,
-    pa: p.pa, pb: p.pb, pc: p.pc,
-    zyggl: p.zyggl,
-    qa: p.qa, qb: p.qb, qc: p.qc,
-    zwggl: p.zwggl,
-    sa: p.sa, sb: p.sb, sc: p.sc,
-    zszgl: p.zszgl,
-    pfa: p.pfa, pfb: p.pfb, pfc: p.pfc,
-    zglys: p.zglys,
-    f: p.f,
+    ua: pv(p, "ua", "Ua"), ub: pv(p, "ub", "Ub"), uc: pv(p, "uc", "Uc"),
+    ia: pv(p, "ia", "Ia"), ib: pv(p, "ib", "Ib"), ic: pv(p, "ic", "Ic"),
+    uab: pv(p, "uab", "Uab"), ubc: pv(p, "ubc", "Ubc"), uca: pv(p, "uca", "Uca"),
+    pa: pv(p, "pa", "Pa"), pb: pv(p, "pb", "Pb"), pc: pv(p, "pc", "Pc"),
+    zyggl: pv(p, "zyggl", "Zyggl"),
+    qa: pv(p, "qa", "Qa"), qb: pv(p, "qb", "Qb"), qc: pv(p, "qc", "Qc"),
+    zwggl: pv(p, "zwggl", "Zwggl"),
+    sa: pv(p, "sa", "Sa"), sb: pv(p, "sb", "Sb"), sc: pv(p, "sc", "Sc"),
+    zszgl: pv(p, "zszgl", "Zszgl"),
+    pfa: pv(p, "pfa", "PFa", "Pfa"), pfb: pv(p, "pfb", "PFb", "Pfb"), pfc: pv(p, "pfc", "PFc", "Pfc"),
+    zglys: pv(p, "zglys", "Zglys"),
+    f: pv(p, "f", "F"),
     u_zero_seq: p.U0, u_pos_seq: p["U+"], u_neg_seq: p["U-"],
     i_zero_seq: p.I0, i_pos_seq: p["I+"], i_neg_seq: p["I-"],
     ua_phase_angle: p.UXJA, ub_phase_angle: p.UXJB, uc_phase_angle: p.UXJC,
@@ -102,17 +103,17 @@ async function handleRtData(sb: SB, p: Record<string, any>, meterId: string) {
   if (error) console.error("[RT_DATA] Insert error:", error);
   else console.log(`[RT_DATA] Stored for ${meterId}`);
 
-  // Also update meter_readings (legacy) and meter status
+  // Also update meter_readings (legacy)
   await sb.from("meter_readings").insert({
     meter_id: meterId,
-    voltage: p.ua,
-    current_amps: p.ia,
-    power_watts: p.zyggl ? p.zyggl * 1000 : null,
+    voltage: pv(p, "ua", "Ua"),
+    current_amps: pv(p, "ia", "Ia"),
+    power_watts: pv(p, "zyggl", "Zyggl") ? pv(p, "zyggl", "Zyggl") * 1000 : null,
     energy_kwh: null,
-    frequency_hz: p.f,
-    power_factor: p.zglys ?? p.pfa,
+    frequency_hz: pv(p, "f", "F"),
+    power_factor: pv(p, "zglys", "Zglys") ?? pv(p, "pfa", "PFa"),
     raw_payload: p,
-  });
+  }).then(({ error: e }) => { if (e) console.error("[RT_DATA] Legacy insert error:", e); });
 }
 
 // ── MQTT_ENY_NOW ─────────────────────────────────────────────
