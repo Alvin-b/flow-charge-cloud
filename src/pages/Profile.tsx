@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   ChevronRight, Moon, Sun, Fingerprint, Shield, Bell, HelpCircle, LogOut,
-  Zap, User, Mail, Phone, Edit3, Crown, ExternalLink, X, Check, Loader2, Cpu
+  Zap, User, Mail, Phone, Edit3, Crown, ExternalLink, X, Check, Loader2, Cpu, Palette
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
