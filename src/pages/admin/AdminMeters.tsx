@@ -17,7 +17,7 @@ export default function AdminMeters() {
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [registerOpen, setRegisterOpen] = useState(false);
-  const [newMeter, setNewMeter] = useState({ name: "", tuya_device_id: "", property_name: "" });
+  const [newMeter, setNewMeter] = useState({ name: "", tuya_device_id: "", property_name: "", mqtt_meter_id: "" });
   const queryClient = useQueryClient();
 
   const { data, isLoading } = useQuery({
