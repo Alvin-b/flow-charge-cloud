@@ -121,9 +121,9 @@ export default {
           to: { transform: "translateY(0)" },
         },
         "pulse-ring": {
-          "0%": { transform: "scale(0.95)", boxShadow: "0 0 0 0 hsl(168 100% 50% / 0.4)" },
-          "70%": { transform: "scale(1)", boxShadow: "0 0 0 12px hsl(168 100% 50% / 0)" },
-          "100%": { transform: "scale(0.95)", boxShadow: "0 0 0 0 hsl(168 100% 50% / 0)" },
+          "0%": { transform: "scale(0.95)", boxShadow: "0 0 0 0 hsl(var(--primary) / 0.4)" },
+          "70%": { transform: "scale(1)", boxShadow: "0 0 0 12px hsl(var(--primary) / 0)" },
+          "100%": { transform: "scale(0.95)", boxShadow: "0 0 0 0 hsl(var(--primary) / 0)" },
         },
         float: {
           "0%, 100%": { transform: "translateY(0px)" },
