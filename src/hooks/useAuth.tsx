@@ -40,11 +40,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const fetchProfile = async (userId: string) => {
     // Fetch profile from safe view (excludes pin_hash)
     const [profileResult, roleResult] = await Promise.all([
-      supabase
+      (supabase
         .from("profiles_safe" as any)
         .select("user_id, full_name, phone, email, avatar_url, is_admin")
         .eq("user_id", userId)
-        .maybeSingle() as Promise<{ data: { user_id: string; full_name: string; phone: string; email: string | null; avatar_url: string | null; is_admin?: boolean } | null }>,
+        .maybeSingle() as unknown as Promise<{ data: { user_id: string; full_name: string; phone: string; email: string | null; avatar_url: string | null; is_admin?: boolean } | null }>),
       supabase
         .from("user_roles" as any)
         .select("role")
