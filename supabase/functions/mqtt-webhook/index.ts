@@ -9,17 +9,11 @@ const corsHeaders = {
 
 /**
  * MQTT Webhook Handler — COMPERE Protocol V1.9
- *
- * Receives meter telemetry from EMQX broker webhook rule.
- *
- * Expected body from EMQX webhook action:
- * {
- *   "topic": "MQTT_RT_DATA",          // COMPERE topic name
- *   "payload": "{\"id\":\"...\", ...}",  // JSON string or object
- *   "clientid": "meter_client_id",
- *   "timestamp": 1234567890
- * }
+ * + Real-time energy consumption tracking & auto-cutoff
  */
+
+const MQTT_HTTP_API_URL = Deno.env.get("MQTT_HTTP_API_URL") || "";
+const MQTT_HTTP_API_KEY = Deno.env.get("MQTT_HTTP_API_KEY") || "";
 
 // ── Helpers ──────────────────────────────────────────────────
 
@@ -34,17 +28,14 @@ function parsePayload(raw: unknown): Record<string, any> | null {
 }
 
 function extractMeterId(payload: Record<string, any>): string | null {
-  // COMPERE uses MN (Meter Number), also check id/code for compatibility
   return payload.MN || payload.id || payload.code || null;
 }
 
-/** Get a value from payload trying both original and lowercase keys */
 function pv(payload: Record<string, any>, ...keys: string[]): any {
   for (const k of keys) {
     if (payload[k] !== undefined) return payload[k];
     const lower = k.toLowerCase();
     if (payload[lower] !== undefined) return payload[lower];
-    // Try uppercase first letter
     const upper = k.charAt(0).toUpperCase() + k.slice(1);
     if (payload[upper] !== undefined) return payload[upper];
   }
@@ -64,6 +55,52 @@ function parseCompereTime(t: string): Date | null {
   } catch {
     return null;
   }
+}
+
+function last8(meterId: string): string {
+  return meterId.slice(-8);
+}
+
+/** Publish MQTT command to EMQX broker */
+async function mqttPublish(topic: string, payload: Record<string, unknown>): Promise<boolean> {
+  if (!MQTT_HTTP_API_URL) return false;
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (MQTT_HTTP_API_KEY) headers["Authorization"] = `Basic ${MQTT_HTTP_API_KEY}`;
+
+  try {
+    const res = await fetch(MQTT_HTTP_API_URL, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ topic, payload: JSON.stringify(payload), qos: 1, retain: false }),
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      console.error(`MQTT publish failed [${res.status}]: ${text}`);
+      return false;
+    }
+    await res.text();
+    console.log(`[MQTT] Published to ${topic}`);
+    return true;
+  } catch (err) {
+    console.error("MQTT publish error:", err);
+    return false;
+  }
+}
+
+/** Send relay OFF command to cut power */
+async function sendRelayCutoff(meterId: string): Promise<boolean> {
+  const oprid = crypto.randomUUID().replace(/-/g, "");
+  const topic = `MQTT_TELECTRL_${last8(meterId)}`;
+  console.log(`⚡ CUTOFF: Sending relay OFF to ${meterId}`);
+  return await mqttPublish(topic, { do1: "0", oprid });
+}
+
+/** Send relay ON command to restore power */
+async function sendRelayRestore(meterId: string): Promise<boolean> {
+  const oprid = crypto.randomUUID().replace(/-/g, "");
+  const topic = `MQTT_TELECTRL_${last8(meterId)}`;
+  console.log(`⚡ RESTORE: Sending relay ON to ${meterId}`);
+  return await mqttPublish(topic, { do1: "1", oprid });
 }
 
 type SB = ReturnType<typeof createClient>;
@@ -119,7 +156,7 @@ async function handleRtData(sb: SB, p: Record<string, any>, meterId: string) {
   }
 }
 
-// ── MQTT_ENY_NOW ─────────────────────────────────────────────
+// ── MQTT_ENY_NOW — Energy readings + consumption tracking ────
 
 async function handleEnyNow(sb: SB, p: Record<string, any>, meterId: string) {
   const readingTime = p.time ? parseCompereTime(p.time) : new Date();
@@ -152,6 +189,41 @@ async function handleEnyNow(sb: SB, p: Record<string, any>, meterId: string) {
 
   if (error) console.error("[ENY_NOW] Insert error:", error);
   else console.log(`[ENY_NOW] Stored for ${meterId}`);
+
+  // ── Real-time consumption tracking ──
+  const importTotalActive = parseFloat(p.zygsz);
+  if (!isNaN(importTotalActive) && importTotalActive > 0) {
+    try {
+      const { data: result, error: rpcError } = await sb.rpc("process_energy_consumption", {
+        p_mqtt_meter_id: meterId,
+        p_current_energy_kwh: importTotalActive,
+      });
+
+      if (rpcError) {
+        console.error("[ENY_NOW] Consumption RPC error:", rpcError);
+      } else if (result) {
+        console.log(`[ENY_NOW] Consumption result:`, JSON.stringify(result));
+
+        // Auto-cutoff: send relay OFF if balance depleted
+        if (result.action === "cutoff" && result.mqtt_meter_id) {
+          const sent = await sendRelayCutoff(result.mqtt_meter_id);
+          if (sent) {
+            // Notify user
+            await sb.rpc("insert_notification", {
+              p_user_id: result.user_id,
+              p_type: "low_balance",
+              p_title: "Power Disconnected",
+              p_body: `Your energy balance has reached zero. Recharge to restore power.`,
+              p_icon: "🔴",
+            });
+            console.log(`🔴 Cutoff sent for meter ${result.mqtt_meter_id}, user ${result.user_id}`);
+          }
+        }
+      }
+    } catch (err) {
+      console.error("[ENY_NOW] Consumption tracking error:", err);
+    }
+  }
 }
 
 // ── MQTT_DAY_DATA ────────────────────────────────────────────
@@ -202,7 +274,6 @@ async function handleCommandResponse(sb: SB, p: Record<string, any>, meterId: st
   const success = p.code === "01";
   const now = new Date().toISOString();
 
-  // Update meter_commands table (relay control responses)
   if (topic === "MQTT_TELECTRL_REP") {
     const { error } = await sb.from("meter_commands")
       .update({
@@ -220,7 +291,6 @@ async function handleCommandResponse(sb: SB, p: Record<string, any>, meterId: st
     return;
   }
 
-  // All other responses go to mqtt_operations
   const updateData: Record<string, any> = {
     status: success ? "completed" : "failed",
     response_code: p.code,
@@ -229,13 +299,11 @@ async function handleCommandResponse(sb: SB, p: Record<string, any>, meterId: st
     mqtt_raw_payload: p,
   };
 
-  // MQTT_SYS_REPLY includes read values
   if (topic === "MQTT_SYS_REPLY") {
     updateData.modbus_address = p.addr;
     updateData.read_value = p.value;
   }
 
-  // MQTT_COMMOD_READ_REP includes frequency values
   if (topic === "MQTT_COMMOD_READ_REP") {
     updateData.command_type = p.Cmd;
     updateData.read_value = p.value;
@@ -267,7 +335,6 @@ async function handleRecallResponse(sb: SB, p: Record<string, any>, meterId: str
 
   if (!error) console.log(`[RECALL_REP] ${oprid}: ${success ? "OK" : "FAIL"}`);
 
-  // If successful, also store the recalled data as a daily reading
   if (success && p.time) {
     const readingDate = p.time.substring(0, 4) + "-" + p.time.substring(4, 6) + "-01";
     await sb.from("mqtt_daily_readings").upsert({
@@ -305,7 +372,6 @@ serve(async (req) => {
   }
 
   try {
-    // Validate webhook secret
     const webhookSecret = Deno.env.get("MQTT_WEBHOOK_SECRET");
     const provided = req.headers.get("X-Webhook-Secret") ||
       req.headers.get("Authorization")?.replace("Bearer ", "");
@@ -351,7 +417,6 @@ serve(async (req) => {
       });
     }
 
-    // Route by COMPERE topic
     switch (topic) {
       case "MQTT_RT_DATA":
         if (payload.isend !== "0") await handleRtData(sb, payload, meterId);
