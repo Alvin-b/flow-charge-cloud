@@ -110,6 +110,8 @@ Deno.serve(async (req) => {
         return json(await sendBroadcast(supabaseAdmin, body));
       case "activity_log":
         return json(await activityLog(supabaseAdmin, body));
+      case "list_wallets":
+        return json(await listWallets(supabaseAdmin, body));
       default:
         return json({ error: `Unknown action: ${action}` }, 400);
     }
