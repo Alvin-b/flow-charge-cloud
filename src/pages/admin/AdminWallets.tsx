@@ -73,22 +73,22 @@ export default function AdminWallets() {
           <StatCard
             title="Total Balance"
             value={`${stats.total_balance.toFixed(1)} kWh`}
-            icon={<Zap className="h-4 w-4" />}
+            icon={Zap}
           />
           <StatCard
             title="Total Wallets"
             value={stats.total_wallets}
-            icon={<Users className="h-4 w-4" />}
+            icon={Users}
           />
           <StatCard
             title="Active (>0 kWh)"
             value={stats.active_wallets}
-            icon={<TrendingUp className="h-4 w-4" />}
+            icon={TrendingUp}
           />
           <StatCard
             title="Zero Balance"
             value={stats.zero_wallets}
-            icon={<AlertTriangle className="h-4 w-4" />}
+            icon={AlertTriangle}
           />
         </div>
 
