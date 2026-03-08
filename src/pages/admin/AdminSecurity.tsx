@@ -25,7 +25,7 @@ export default function AdminSecurity() {
   const actionCounts = data?.hourly_action_counts ?? {};
   const roleCounts = data?.role_counts ?? {};
 
-  const totalHourlyEvents = Object.values(actionCounts).reduce((s: number, v: any) => s + v, 0);
+  const totalHourlyEvents = Object.values(actionCounts).reduce((s: number, v: any) => s + (v as number), 0);
 
   return (
     <AdminLayout>
