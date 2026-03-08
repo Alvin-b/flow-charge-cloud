@@ -112,6 +112,16 @@ Deno.serve(async (req) => {
         return json(await activityLog(supabaseAdmin, body));
       case "list_wallets":
         return json(await listWallets(supabaseAdmin, body));
+      case "list_meter_commands":
+        return json(await listMeterCommands(supabaseAdmin, body));
+      case "list_kplc_payments":
+        return json(await listKplcPayments(supabaseAdmin, body));
+      case "kplc_pool_status":
+        return json(await kplcPoolStatus(supabaseAdmin));
+      case "analytics_overview":
+        return json(await analyticsOverview(supabaseAdmin, body));
+      case "list_rate_limits":
+        return json(await listRateLimits(supabaseAdmin, body));
       default:
         return json({ error: `Unknown action: ${action}` }, 400);
     }

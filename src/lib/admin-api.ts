@@ -72,6 +72,23 @@ export const adminApi = {
   listWallets: (page = 1, limit = 50, search = "") =>
     callAdmin("list_wallets", { page, limit, search }),
 
+  // Meter Commands
+  listMeterCommands: (page = 1, limit = 50, search = "") =>
+    callAdmin("list_meter_commands", { page, limit, search }),
+
+  // KPLC
+  listKplcPayments: (page = 1, limit = 50) =>
+    callAdmin("list_kplc_payments", { page, limit }),
+  getKplcPoolStatus: () => callAdmin("kplc_pool_status"),
+
+  // Analytics
+  getAnalyticsOverview: (period = "30d") =>
+    callAdmin("analytics_overview", { period }),
+
+  // Rate Limits / Security
+  listRateLimits: (page = 1, limit = 50) =>
+    callAdmin("list_rate_limits", { page, limit }),
+
   // Activity Log
   getActivityLog: (page = 1, limit = 50) =>
     callAdmin("activity_log", { page, limit }),
