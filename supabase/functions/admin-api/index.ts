@@ -122,6 +122,8 @@ Deno.serve(async (req) => {
         return json(await analyticsOverview(supabaseAdmin, body));
       case "list_rate_limits":
         return json(await listRateLimits(supabaseAdmin, body));
+      case "test_mqtt":
+        return json(await testMqttConnection(supabaseAdmin));
       default:
         return json({ error: `Unknown action: ${action}` }, 400);
     }
