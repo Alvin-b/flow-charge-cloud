@@ -5,7 +5,7 @@
 
 import React, { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import mqttApi, { type MeterReading, type DailyReading, type MqttOperation } from "@/lib/mqtt-client-api";
+import mqttApi, { type MeterReading, type DailyReading } from "@/lib/mqtt-client-api";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
