@@ -36,7 +36,7 @@ export default function AdminMeters() {
     onSuccess: () => {
       toast.success("Meter registered");
       setRegisterOpen(false);
-      setNewMeter({ name: "", tuya_device_id: "", property_name: "" });
+      setNewMeter({ name: "", tuya_device_id: "", property_name: "", mqtt_meter_id: "" });
       queryClient.invalidateQueries({ queryKey: ["admin", "meters"] });
     },
     onError: (e: any) => toast.error(e.message),
