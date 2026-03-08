@@ -690,3 +690,74 @@ async function listRateLimits(sb: any, opts: any) {
     role_counts: roleCounts,
   };
 }
+
+// ─── MQTT Connection Test ────────────────────────────────
+
+async function testMqttConnection(sb: any) {
+  // Try to reach EMQX HTTP API
+  const apiUrl = Deno.env.get("MQTT_HTTP_API_URL");
+  const apiKey = Deno.env.get("MQTT_HTTP_API_KEY");
+
+  if (!apiUrl || !apiKey) {
+    // Fallback: check system_settings
+    const { data: settings } = await sb.from("system_settings")
+      .select("key, value")
+      .in("key", ["mqtt_broker_host", "mqtt_dashboard_port"]);
+
+    const map: Record<string, string> = {};
+    (settings || []).forEach((s: any) => { map[s.key] = s.value; });
+
+    if (!map.mqtt_broker_host) {
+      return { connected: false, error: "MQTT_HTTP_API_URL secret not set and no broker host configured in settings" };
+    }
+
+    const port = map.mqtt_dashboard_port || "18083";
+    const testUrl = `http://${map.mqtt_broker_host}:${port}/api/v5/status`;
+
+    try {
+      const res = await fetch(testUrl, { signal: AbortSignal.timeout(8000) });
+      if (res.ok) {
+        const data = await res.json().catch(() => ({}));
+        return {
+          connected: true,
+          version: data.rel_vsn || data.version || "unknown",
+          nodes: data.node_name ? 1 : (data.running_nodes || 1),
+        };
+      }
+      return { connected: false, error: `HTTP ${res.status}: ${res.statusText}` };
+    } catch (e: any) {
+      return { connected: false, error: e.message || "Network error" };
+    }
+  }
+
+  // Use configured API URL
+  const statusUrl = apiUrl.replace(/\/api\/v5\/?$/, "/api/v5/status").replace(/\/$/, "");
+  const finalUrl = statusUrl.includes("/status") ? statusUrl : `${apiUrl.replace(/\/$/, "")}/status`;
+
+  try {
+    const res = await fetch(finalUrl, {
+      headers: { "Authorization": `Basic ${apiKey}` },
+      signal: AbortSignal.timeout(8000),
+    });
+
+    if (res.ok) {
+      const data = await res.json().catch(() => ({}));
+      return {
+        connected: true,
+        version: data.rel_vsn || data.version || "unknown",
+        nodes: data.node_name ? 1 : (data.running_nodes || 1),
+      };
+    }
+
+    // Try without auth (status endpoint is often public)
+    const res2 = await fetch(finalUrl, { signal: AbortSignal.timeout(5000) });
+    if (res2.ok) {
+      const data = await res2.json().catch(() => ({}));
+      return { connected: true, version: data.rel_vsn || "unknown", nodes: 1 };
+    }
+
+    return { connected: false, error: `HTTP ${res.status}: ${res.statusText}` };
+  } catch (e: any) {
+    return { connected: false, error: e.message || "Network error reaching broker" };
+  }
+}
