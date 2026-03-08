@@ -10,6 +10,7 @@ import BottomNav from "@/components/BottomNav";
 import { useTheme, COLOR_THEMES } from "@/components/ThemeProvider";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
+import { Copy as CopyIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { Sounds } from "@/lib/sounds";

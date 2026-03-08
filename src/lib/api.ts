@@ -218,9 +218,9 @@ export const meterApi = {
  */
 export const transferApi = {
   /**
-   * Send energy to another user by phone number
+   * Send energy to another user by User ID
    */
-  async send(recipientPhone: string, amountKwh: number) {
+  async send(recipientId: string, amountKwh: number) {
     const token = await getAuthToken();
     const url = `${SUPABASE_URL}/functions/v1/p2p-transfer?action=send`;
     
@@ -231,7 +231,7 @@ export const transferApi = {
         "Content-Type": "application/json",
         apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
       },
-      body: JSON.stringify({ recipient_phone: recipientPhone, amount_kwh: amountKwh }),
+      body: JSON.stringify({ recipient_id: recipientId, amount_kwh: amountKwh }),
     });
 
     const data = await response.json();
