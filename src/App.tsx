@@ -77,6 +77,7 @@ const App = () => {
                 <Route path="/install" element={<Install />} />
 
                 {/* Admin auth */}
+                <Route path="/admin" element={<AdminLogin />} />
                 <Route path="/admin/login" element={<AdminLogin />} />
 
                 {/* Admin routes */}
