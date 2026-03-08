@@ -92,4 +92,7 @@ export const adminApi = {
   // Activity Log
   getActivityLog: (page = 1, limit = 50) =>
     callAdmin("activity_log", { page, limit }),
+
+  // MQTT
+  testMqtt: () => callAdmin("test_mqtt"),
 };
