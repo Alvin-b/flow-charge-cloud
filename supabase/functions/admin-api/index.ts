@@ -124,6 +124,12 @@ Deno.serve(async (req) => {
         return json(await listRateLimits(supabaseAdmin, body));
       case "test_mqtt":
         return json(await testMqttConnection(supabaseAdmin));
+      case "register_meters_bulk":
+        return json(await registerMetersBulk(supabaseAdmin, body, userId));
+      case "list_meter_registry":
+        return json(await listMeterRegistry(supabaseAdmin, body));
+      case "delete_registry_entry":
+        return json(await deleteRegistryEntry(supabaseAdmin, body.id));
       default:
         return json({ error: `Unknown action: ${action}` }, 400);
     }
