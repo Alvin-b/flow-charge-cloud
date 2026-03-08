@@ -337,9 +337,12 @@ export type Database = {
           balance_kwh: number
           created_at: string
           id: string
+          is_relay_on: boolean | null
+          last_energy_kwh: number | null
           last_sync: string | null
           linked_at: string | null
           max_kwh: number
+          mqtt_meter_id: string | null
           name: string
           property_name: string | null
           rate_kwh_hr: number | null
@@ -353,9 +356,12 @@ export type Database = {
           balance_kwh?: number
           created_at?: string
           id?: string
+          is_relay_on?: boolean | null
+          last_energy_kwh?: number | null
           last_sync?: string | null
           linked_at?: string | null
           max_kwh?: number
+          mqtt_meter_id?: string | null
           name?: string
           property_name?: string | null
           rate_kwh_hr?: number | null
@@ -369,9 +375,12 @@ export type Database = {
           balance_kwh?: number
           created_at?: string
           id?: string
+          is_relay_on?: boolean | null
+          last_energy_kwh?: number | null
           last_sync?: string | null
           linked_at?: string | null
           max_kwh?: number
+          mqtt_meter_id?: string | null
           name?: string
           property_name?: string | null
           rate_kwh_hr?: number | null
@@ -1161,6 +1170,7 @@ export type Database = {
       }
     }
     Functions: {
+      auto_reconnect_on_recharge: { Args: { p_user_id: string }; Returns: Json }
       check_rate_limit: {
         Args: {
           p_action: string
@@ -1204,6 +1214,10 @@ export type Database = {
           p_user_id: string
         }
         Returns: undefined
+      }
+      process_energy_consumption: {
+        Args: { p_current_energy_kwh: number; p_mqtt_meter_id: string }
+        Returns: Json
       }
       reset_pin: { Args: never; Returns: undefined }
       set_pin: { Args: { p_pin_hash: string }; Returns: undefined }
