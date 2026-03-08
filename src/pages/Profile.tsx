@@ -354,8 +354,8 @@ const Profile = () => {
         </Section>
 
         <Section title="Support">
-          <MenuItem icon={HelpCircle} label="FAQ & Help" subtitle="Common questions answered" />
-          <MenuItem icon={ExternalLink} label="Contact Support" subtitle="Get help from our team" />
+          <MenuItem icon={HelpCircle} label="FAQ & Help" subtitle="Common questions answered" onClick={() => navigate("/faq")} />
+          <MenuItem icon={ExternalLink} label="Contact Support" subtitle="Get help from our team" onClick={() => window.open("mailto:support@powerflow.co.ke")} />
         </Section>
 
         <Section title="Account">
