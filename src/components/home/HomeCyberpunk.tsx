@@ -9,6 +9,7 @@ import BottomNav from "@/components/BottomNav";
 import { cn } from "@/lib/utils";
 import { Sounds } from "@/lib/sounds";
 import { HomeData, getTimeAgo } from "./HomeDataProvider";
+import AIInsights from "@/components/AIInsights";
 
 const EnergyRing = ({ pct, isLow }: { pct: number; isLow: boolean }) => {
   const r = 54;
