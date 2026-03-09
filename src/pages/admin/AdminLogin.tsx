@@ -5,6 +5,13 @@ import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { Shield, Mail, Lock, Eye, EyeOff } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
+
 export default function AdminLogin() {
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -30,26 +37,49 @@ export default function AdminLogin() {
 
       if (!userId) throw new Error("Login failed");
 
-      // Check admin status via user_roles + profiles
-      const [{ data: roleRow }, { data: profileRow }] = await Promise.all([
-        supabase
-          .from("user_roles" as any)
-          .select("role")
-          .eq("user_id", userId)
-          .eq("role", "admin")
-          .maybeSingle(),
-        supabase
-          .from("profiles_safe" as any)
+      // Check admin status - try profiles first, fallback to user_roles
+      let isAdmin = false;
+
+      try {
+        // First try profiles table
+        const { data: profileRow, error: profileError } = await supabase
+          .from("profiles")
           .select("is_admin")
           .eq("user_id", userId)
-          .maybeSingle() as any,
-      ]);
+          .maybeSingle();
 
-      const isAdmin = !!roleRow || !!(profileRow as any)?.is_admin;
+        if (!profileError && profileRow?.is_admin) {
+          isAdmin = true;
+        }
+      } catch (profileErr) {
+        console.warn("Could not check profiles table:", profileErr);
+      }
+
+      // If not admin via profiles, try user_roles
+      if (!isAdmin) {
+        try {
+          const { data: roleRow, error: roleError } = await supabase
+            .from("user_roles")
+            .select("role")
+            .eq("user_id", userId)
+            .eq("role", "admin")
+            .maybeSingle();
+
+          if (!roleError && roleRow) {
+            isAdmin = true;
+          }
+        } catch (roleErr) {
+          console.warn("Could not check user_roles table:", roleErr);
+        }
+      }
 
       if (!isAdmin) {
         await supabase.auth.signOut();
-        toast({ title: "Access Denied", description: "This account does not have admin privileges.", variant: "destructive" });
+        toast({
+          title: "Access Denied",
+          description: "This account does not have admin privileges.",
+          variant: "destructive"
+        });
         return;
       }
 
@@ -57,7 +87,12 @@ export default function AdminLogin() {
       await new Promise(r => setTimeout(r, 500));
       navigate("/admin/dashboard", { replace: true });
     } catch (err: any) {
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+      console.error("Admin login error:", err);
+      toast({
+        title: "Error",
+        description: err.message || "Login failed",
+        variant: "destructive"
+      });
     } finally {
       setLoading(false);
     }
