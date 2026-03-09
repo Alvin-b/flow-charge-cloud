@@ -328,6 +328,7 @@ async function handleCallback(supabase: any, body: any) {
               qos: 1,
               retain: false,
             }),
+            tls: false,
           }).then(async (res) => {
             if (res.ok) {
               console.log(`⚡ Relay ON sent to ${topic} for user ${transaction.user_id}`);

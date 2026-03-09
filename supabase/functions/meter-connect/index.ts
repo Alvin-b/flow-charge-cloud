@@ -26,6 +26,7 @@ async function mqttPublish(topic: string, payload: Record<string, unknown>): Pro
       method: "POST",
       headers,
       body: JSON.stringify({ topic, payload: JSON.stringify(payload), qos: 1, retain: false }),
+      tls: false,
     });
     if (!res.ok) {
       const text = await res.text();

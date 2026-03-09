@@ -71,6 +71,7 @@ async function mqttPublish(topic: string, payload: Record<string, unknown>): Pro
         qos: 1,
         retain: false,
       }),
+      tls: false,
     });
 
     if (!res.ok) {

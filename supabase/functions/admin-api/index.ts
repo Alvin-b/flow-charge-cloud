@@ -721,7 +721,7 @@ async function testMqttConnection(sb: any) {
     const testUrl = `http://${map.mqtt_broker_host}:${port}/api/v5/status`;
 
     try {
-      const res = await fetch(testUrl, { signal: AbortSignal.timeout(8000) });
+      const res = await fetch(testUrl, { signal: AbortSignal.timeout(8000), tls: false });
       if (res.ok) {
         const data = await res.json().catch(() => ({}));
         return {
@@ -744,6 +744,7 @@ async function testMqttConnection(sb: any) {
     const res = await fetch(finalUrl, {
       headers: { "Authorization": `Basic ${apiKey}` },
       signal: AbortSignal.timeout(8000),
+      tls: false,
     });
 
     if (res.ok) {
@@ -756,7 +757,7 @@ async function testMqttConnection(sb: any) {
     }
 
     // Try without auth (status endpoint is often public)
-    const res2 = await fetch(finalUrl, { signal: AbortSignal.timeout(5000) });
+    const res2 = await fetch(finalUrl, { signal: AbortSignal.timeout(5000), tls: false });
     if (res2.ok) {
       const data = await res2.json().catch(() => ({}));
       return { connected: true, version: data.rel_vsn || "unknown", nodes: 1 };
